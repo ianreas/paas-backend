@@ -17,8 +17,8 @@ func main() {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			"AKIAYS2NQGBQSSNQNFN7",
-			"00SmMjSVGgNqeIlpPmQ8Qno8suxNvNae7EEmzIcV",
+			"",
+			"",
 			"",
 		)),
 	)
