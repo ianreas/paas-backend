@@ -18,7 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 )
 
-// github token: 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
+// g
 
 type BuildAndPushRequest struct {
 	RepoFullName string `json:"repoFullName"`
