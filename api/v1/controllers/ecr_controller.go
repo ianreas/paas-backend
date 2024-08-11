@@ -147,3 +147,12 @@ func pushToECR(ctx context.Context, imageName string) error {
 	return nil
 }
 
+// 1. decode the request body into a struct that stores the repoFullName and accessToken. 
+// 		- maybe i should also ask the users to provide the memory and cpu limits for the container in the same api request
+//		- so i can build the image, push to ecr and deploy to eks all from 1 request
+// 2. clone the repository using the accessToken
+// 3. find the Dockerfile in the cloned repository
+// 4. build the Docker image using the Dockerfile
+// 5. push the Docker image to ECR
+// I AM HERE
+// 6. 
