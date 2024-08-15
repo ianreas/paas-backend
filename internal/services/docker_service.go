@@ -1,28 +1,19 @@
+// services/docker_service.go
 package services
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+    "fmt"
+    "os/exec"
+    "path/filepath"
 )
 
-func FindDockerfile(dir string) (string, error) {
-	var dockerfilePath string
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && filepath.Base(path) == "Dockerfile" {
-			dockerfilePath = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	if dockerfilePath == "" {
-		return "", fmt.Errorf("Dockerfile not found in %s", dir)
-	}
-	return dockerfilePath, nil
+type DockerServiceImpl struct{}
+
+func NewDockerService() DockerService {
+    return &DockerServiceImpl{}
+}
+
+func (s *DockerServiceImpl) BuildImage(dockerfilePath, imageName string) error {
+    buildCmd := exec.Command("docker", "build", "-f", dockerfilePath, "-t", fmt.Sprintf("%s:latest", imageName), filepath.Dir(dockerfilePath))
+    return buildCmd.Run()
 }
