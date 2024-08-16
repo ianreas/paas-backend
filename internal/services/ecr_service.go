@@ -12,21 +12,21 @@ import (
     "paas-backend/internal/utils"
 )
 
-type ECRService struct {
-    dockerService DockerService
-    ecrRepo       ECRRepository
-    eksService    EKSService
-}
-
-func NewECRService(dockerService DockerService, ecrRepo ECRRepository, eksService EKSService) *ECRService {
-    return &ECRService{
+func NewECRService(dockerService DockerService, ecrRepo ECRRepository, eksService EKSService) ECRService {
+    return &ECRServiceImpl{
         dockerService: dockerService,
         ecrRepo:       ecrRepo,
         eksService:    eksService,
     }
 }
 
-func (s *ECRService) BuildAndPushToECR(ctx context.Context, repoFullName, accessToken string) (string, error) {
+type ECRServiceImpl struct {
+    dockerService DockerService
+    ecrRepo       ECRRepository
+    eksService    EKSService
+}
+
+func (s *ECRServiceImpl) BuildAndPushToECR(ctx context.Context, repoFullName, accessToken string) (string, error) {
     repoDir, err := s.cloneRepository(repoFullName, accessToken)
     if err != nil {
         return "", fmt.Errorf("failed to clone repository: %w", err)
@@ -55,7 +55,7 @@ func (s *ECRService) BuildAndPushToECR(ctx context.Context, repoFullName, access
     return ecrImageName, nil
 }
 
-func (s *ECRService) cloneRepository(repoFullName, accessToken string) (string, error) {
+func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
     repoDir := filepath.Join(os.TempDir(), strings.ReplaceAll(repoFullName, "/", "_"))
     if err := os.RemoveAll(repoDir); err != nil {
         return "", fmt.Errorf("failed to remove existing directory: %w", err)

@@ -1,39 +1,59 @@
 package controllers
 
 import (
-    "encoding/json"
-    "net/http"
-    "paas-backend/internal/services"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"paas-backend/internal/services"
+	"path/filepath"
 )
 
-type BuildAndPushRequest struct {
-    RepoFullName string `json:"repoFullName"`
-    AccessToken  string `json:"accessToken"`
-}
-
 type ECRController struct {
-    ecrService services.ECRService
+	ecrService services.ECRService
+	eksService services.EKSService
 }
 
-func NewECRController(ecrService services.ECRService) *ECRController {
-    return &ECRController{ecrService: ecrService}
+func NewECRController(ecrService services.ECRService, eksService services.EKSService) *ECRController {
+	return &ECRController{
+		ecrService: ecrService,
+		eksService: eksService,
+	}
+}
+
+type BuildAndPushRequest struct {
+	RepoFullName  string `json:"repoFullName"`
+	AccessToken   string `json:"accessToken"`
 }
 
 func (c *ECRController) BuildAndPushToECR(w http.ResponseWriter, r *http.Request) {
-    var req BuildAndPushRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request body", http.StatusBadRequest)
-        return
-    }
+	var req BuildAndPushRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
-    ecrImageName, err := c.ecrService.BuildAndPushToECR(r.Context(), req.RepoFullName, req.AccessToken)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+	ecrImageName, err := c.ecrService.BuildAndPushToECR(r.Context(), req.RepoFullName, req.AccessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error building and pushing to ECR: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Image built and pushed successfully", "ecrImageName": ecrImageName})
+	// Extract the app name from the repo full name
+	appName := filepath.Base(req.RepoFullName)
+
+	// Deploy to EKS
+	err = c.eksService.DeployToEKS(r.Context(), ecrImageName, appName, 3000)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error deploying to EKS: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":      "Image built, pushed to ECR, and deployed to EKS successfully",
+		"ecrImageName": ecrImageName,
+		"appName":      appName,
+	})
 }
 
 // package controllers
