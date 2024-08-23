@@ -8,12 +8,23 @@ import (
 	"path/filepath"
 )
 
+// structs are like classes but without the methods 
+// structs in go are a little weird but you can define methods on them separately
+// and pass in data from structs into those methods
 type ECRController struct {
 	ecrService services.ECRService
 	eksService services.EKSService
 }
 
+// a factory constructor function that creates a new ECRController instance
+// it takes two parameters, ecrService and eksService and then passes them to the struct
+// and then initalizes an instance of that ECRController struct with those parameters
+// but it doesnt return the struct itself, it creates an instance and then returns a pointer to it
+// Note: *ECRController is a pointer type, its used when you want to work with a reference to the struct
+// functions that take that type as a parameter, can directly modify the original instance
 func NewECRController(ecrService services.ECRService, eksService services.EKSService) *ECRController {
+	// & is used to return an address of the ECRController instance
+	// it creates a pointer to an existing struct (this also creates the instance itself)
 	return &ECRController{
 		ecrService: ecrService,
 		eksService: eksService,
@@ -21,11 +32,11 @@ func NewECRController(ecrService services.ECRService, eksService services.EKSSer
 }
 
 type BuildAndPushRequest struct {
-	RepoFullName  string `json:"repoFullName"`
-	AccessToken   string `json:"accessToken"`
+	RepoFullName string `json:"repoFullName"`
+	AccessToken  string `json:"accessToken"`
 }
 
-func (c *ECRController) BuildAndPushToECR(w http.ResponseWriter, r *http.Request) {
+func (c *ECRController) BuildAndPushToECRApiHandler(w http.ResponseWriter, r *http.Request) {
 	var req BuildAndPushRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
