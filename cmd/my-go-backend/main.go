@@ -25,11 +25,16 @@ func main() {
 		log.Fatalf("Failed to initialize AWS services: %v", err)
 	}
 
+	deps, err := v1.NewDependencies(ctx)
+	if err != nil {
+		log.Fatalf("Failed to initialize dependencies: %v", err)
+	}
+
 	// Middleware
 	r.Use(middleware.LoggingMiddleware)
 
 	// Register routes
-	v1.RegisterRoutes(r.PathPrefix("/api/v1").Subrouter())
+	v1.RegisterRoutes(r.PathPrefix("/api/v1").Subrouter(), deps)
 
 	// Start server
 	log.Println("Server listening on port 3005")
