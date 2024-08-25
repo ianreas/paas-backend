@@ -12,6 +12,8 @@ import (
     "paas-backend/internal/utils"
 )
 
+// this creates an instance of an ECRService. 
+// and returns a pointer to it. 
 func NewECRService(dockerService DockerService, ecrRepo ECRRepository, eksService EKSService) ECRService {
     return &ECRServiceImpl{
         dockerService: dockerService,

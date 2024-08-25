@@ -25,6 +25,8 @@ func main() {
 		log.Fatalf("Failed to initialize AWS services: %v", err)
 	}
 
+	// the dependancies are initialized once at the application start,
+	// not every time there is an api request
 	deps, err := v1.NewDependencies(ctx)
 	if err != nil {
 		log.Fatalf("Failed to initialize dependencies: %v", err)
@@ -40,3 +42,4 @@ func main() {
 	log.Println("Server listening on port 3005")
 	log.Fatal(http.ListenAndServe(":3005", r))
 }
+

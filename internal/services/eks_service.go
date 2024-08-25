@@ -147,6 +147,9 @@ func (s *EKSServiceImpl) getKubernetesClientset(ctx context.Context, clusterName
 	return clientset, nil
 }
 
+// creates a kubernetes deployment in eks
+// takes the appName, imageName, and the port as arguments
+// if the deployment with that appName exists in the default namespace, just updates the deployment
 func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset *kubernetes.Clientset, appName, imageName string, containerListensOnPort int32) error {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

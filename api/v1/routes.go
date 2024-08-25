@@ -11,11 +11,14 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// meow
+
 type Dependencies struct {
 	ECRService services.ECRService
 	EKSService services.EKSService
 }
-///
+
+// /
 func NewDependencies(ctx context.Context) (*Dependencies, error) {
 	dockerService := services.NewDockerService()
 	ecrRepo, err := repositories.NewECRRepository(ctx)
@@ -46,8 +49,18 @@ func RegisterRoutes(r *mux.Router, deps *Dependencies) {
 	r.HandleFunc("/ec2", controllers.CreateEC2InstanceHandler).Methods("POST")
 	r.HandleFunc("/rds", controllers.CreateRDSInstanceHandler).Methods("POST")
 	r.HandleFunc("/deploy", controllers.DeployHandler).Methods("POST")
-	r.HandleFunc("/build-and-push", controllers.BuildAndPushToECRApiHandler(deps.ECRService, deps.EKSService)).Methods("POST")
+	r.HandleFunc("/build-and-push-deploy", controllers.BuildPushDeployApiHandler(deps.ECRService, deps.EKSService)).Methods("POST")
 	r.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	}).Methods("GET")
 }
+
+// thread safety for build-and-push route
+// 1) Dependencies Initialization in main.go:
+// deps, err := v1.NewDependencies(ctx) => the dependencies are initialized once at the application start, not per request
+// 2) route registration: routes are registered using the initialized dependencies
+// 3) handler function: the BuildAndPushToECRApiHandler is used which is a closure that captures the dependencies: ECRService and EKSService
+// this suggests that:
+// 1) each request gets its own instance of the handler function
+// 2) the services ECRService and EKSService are shared across the requests but they are designed as stateless and threadsafe:
+// 3) Any state specific to a request (like the request body) is handled within the scope of each request handler.

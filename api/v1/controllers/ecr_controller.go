@@ -13,7 +13,7 @@ type BuildAndPushRequest struct {
 	AccessToken  string `json:"accessToken"`
 }
 
-func BuildAndPushToECRApiHandler(ecrService services.ECRService, eksService services.EKSService) http.HandlerFunc {
+func BuildPushDeployApiHandler(ecrService services.ECRService, eksService services.EKSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req BuildAndPushRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
