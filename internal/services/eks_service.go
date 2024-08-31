@@ -74,6 +74,8 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 }
 
 
+
+
 func (s *EKSServiceImpl) waitForNodes(ctx context.Context, clusterName string) error {
 	clientset, err := s.getKubernetesClientset(ctx, clusterName)
 	if err != nil {
@@ -420,6 +422,60 @@ func (s *EKSServiceImpl) checkEC2Errors(ctx context.Context) error {
                 log.Printf("Instance %s event: %s", *status.InstanceId, *event.Description)
             }
         }
+    }
+
+    return nil
+}
+
+// creates a configmap for fluent bit. this is so we can stream logs from eks
+func createFluentBitConfigMap(ctx context.Context, clientset *kubernetes.Clientset) error {
+    configMap := &corev1.ConfigMap{
+        ObjectMeta: metav1.ObjectMeta{
+            Name: "fluent-bit-config",
+        },
+        Data: map[string]string{
+            "fluent-bit.conf": `
+[SERVICE]
+    Flush        1
+    Log_Level    info
+    Parsers_File parsers.conf
+
+[INPUT]
+    Name             tail
+    Path             /var/log/containers/*.log
+    Parser           docker
+    Tag              kube.*
+    Mem_Buf_Limit    5MB
+    Skip_Long_Lines  On
+
+[FILTER]
+    Name                kubernetes
+    Match               kube.*
+    Kube_URL            https://kubernetes.default.svc:443
+    Merge_Log           On
+
+[OUTPUT]
+    Name                cloudwatch
+    Match               *
+    region              ${AWS_REGION}
+    log_group_name      /eks/${CLUSTER_NAME}/containers
+    log_stream_prefix   ${HOST_NAME}-
+    auto_create_group   true
+
+[OUTPUT]
+    Name                http
+    Match               *
+    Host                ${BACKEND_HOST}
+    Port                ${BACKEND_PORT}
+    URI                 /logs
+    Format              json
+`,
+        },
+    }
+
+    _, err := clientset.CoreV1().ConfigMaps("default").Create(ctx, configMap, metav1.CreateOptions{})
+    if err != nil {
+        return fmt.Errorf("failed to create Fluent Bit ConfigMap: %w", err)
     }
 
     return nil

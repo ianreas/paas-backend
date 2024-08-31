@@ -13,7 +13,7 @@ type EKSInfoService struct {
 	cfg aws.Config
 }
 
-func NewEKSInfoService(ctx context.Context) (*EKSInfoService, error) {
+func NewEKSInfoService(ctx context.Context) (EKSInfoService, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load default config: in NewEKSInfoService: %w", err)
