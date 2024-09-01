@@ -16,6 +16,7 @@ import (
 type Dependencies struct {
 	ECRService services.ECRService
 	EKSService services.EKSService
+	LogService services.LogService
 }
 
 // /
@@ -31,11 +32,17 @@ func NewDependencies(ctx context.Context) (*Dependencies, error) {
 		return nil, err
 	}
 
+	logService, err := services.NewLogService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	ecrService := services.NewECRService(dockerService, ecrRepo, eksService)
 
 	return &Dependencies{
 		ECRService: ecrService,
 		EKSService: eksService,
+		LogService: logService,
 	}, nil
 }
 
@@ -53,6 +60,7 @@ func RegisterRoutes(r *mux.Router, deps *Dependencies) {
 	r.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	}).Methods("GET")
+	r.HandleFunc("/logs/{appName}", controllers.StreamLogsHandler(deps.LogService)).Methods("GET")
 }
 
 // thread safety for build-and-push route

@@ -2,6 +2,8 @@ github.com/aws/aws-sdk-go v1.54.6 h1:HEYUib3yTt8E6vxjMWM3yAq5b+qjj/6aKA62mkgux9g
 github.com/aws/aws-sdk-go v1.54.6/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
 github.com/aws/aws-sdk-go-v2 v1.30.4 h1:frhcagrVNrzmT95RJImMHgabt99vkXGslubDaDagTk8=
 github.com/aws/aws-sdk-go-v2 v1.30.4/go.mod h1:CT+ZPWXbYrci8chcARI3OmI/qgd+f6WtuLOoaIA8PR0=
+github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.4 h1:70PVAiL15/aBMh5LThwgXdSQorVr91L127ttckI9QQU=
+github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.4/go.mod h1:/MQxMqci8tlqDH+pjmoLu1i0tbWCUP1hhyMRuFxpQCw=
 github.com/aws/aws-sdk-go-v2/config v1.27.21 h1:yPX3pjGCe2hJsetlmGNB4Mngu7UPmvWPzzWCv1+boeM=
 github.com/aws/aws-sdk-go-v2/config v1.27.21/go.mod h1:4XtlEU6DzNai8RMbjSF5MgGZtYvrhBP/aKZcRtZAVdM=
 github.com/aws/aws-sdk-go-v2/credentials v1.17.21 h1:pjAqgzfgFhTv5grc7xPHtXCAaMapzmwA7aU+c/SZQGw=
@@ -16,6 +18,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 h1:hT8rVHwugYE2lEfdFE0QWVo81lF7
 github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0/go.mod h1:8tu/lYfQfFe6IGnaOdrpVgEL2IrrDOf6/m9RQum4NkY=
 github.com/aws/aws-sdk-go-v2/service/autoscaling v1.43.3 h1:y4kBd6IXizNoJ1QnVa1kFFmonxnv6mm6z+q7z0Jkdhg=
 github.com/aws/aws-sdk-go-v2/service/autoscaling v1.43.3/go.mod h1:j2WsKJ/NQS+y8JUgpv+BBzyzddNZP2SG60fB5aQBZaA=
+github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.38.0 h1:nawnkdqwinpBukRuDd+h0eURWHk67W4OInSJrD4NJsE=
+github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.38.0/go.mod h1:K27H8p8ZmsntKSSC8det8LuT5WahXoJ4vZqlWwKTRaM=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.165.1 h1:LkSnU1c9JKJyXYcwpWgQGuwctwv3pDenMUgH2CmLd1A=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.165.1/go.mod h1:Wv7N3iFOKVsZNIaw9MOBUmwCkX6VMmQQRFhMrHtNGno=
 github.com/aws/aws-sdk-go-v2/service/ecr v1.31.0 h1:vi/MwojjLGATEEUFn2GEdLiom7CFlB+qCIx4tDWqKfQ=

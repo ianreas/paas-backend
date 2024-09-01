@@ -1,0 +1,20 @@
+i am building a paas tool based on aws eks.
+i am using go, mux and gorilla for the backend.
+i am organizing the api endpoints in the route folder.
+i am putting functions in the services folder.
+for the frontend i am using next js 14 and shadcn.
+i like functional programming, immutability and typesafety. 
+
+this paas tool allows users to deploy their servers to eks with a few clicks of a button. 
+my paas takes the github repo they give me access for, clones it, builds a docker image,
+pushes it to ecr, then deploys it to eks. 
+i want users to be able to stream logs and filter/search the logs for last month.
+
+for now, i am building a simple version of it where i am only deploying 1 server to the same cluster. 
+
+i need as much of it as possible to be done programmatically since its i want to abstract it away from the user. 
+
+don't be lazy, write all the code to implement the features i ask for. 
+
+i am building an MVP so think about the solutions that bring maximum benefit for minimum cost. 
+

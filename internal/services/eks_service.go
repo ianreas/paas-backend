@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/aws-iam-authenticator/pkg/token"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
 
@@ -50,8 +51,8 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 	log.Printf("Starting deployment to EKS for app: %s", appName)
 
 	if err := s.checkServiceQuotas(ctx); err != nil {
-        return fmt.Errorf("failed to check service quotas: %w", err)
-    }
+		return fmt.Errorf("failed to check service quotas: %w", err)
+	}
 
 	if err := s.ensureNodeGroupHasNodes(ctx, clusterName); err != nil {
 		return fmt.Errorf("failed to ensure node group has nodes: %w", err)
@@ -70,11 +71,17 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 		return err
 	}
 
+	// i think this needs be done not when deploying the app but when creating the cluster
+	// if err := createFluentBitConfigMap(ctx, clientset); err != nil {
+	// 	return fmt.Errorf("failed to create Fluent Bit ConfigMap: %w", err)
+	// }
+
+	// if err := createFluentBitDaemonSet(ctx, clientset); err != nil {
+	// 	return fmt.Errorf("failed to create Fluent Bit DaemonSet: %w", err)
+	// }
+
 	return nil
 }
-
-
-
 
 func (s *EKSServiceImpl) waitForNodes(ctx context.Context, clusterName string) error {
 	clientset, err := s.getKubernetesClientset(ctx, clusterName)
@@ -169,6 +176,9 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 					Labels: map[string]string{
 						"app": appName,
 					},
+					Annotations: map[string]string{
+						"fluentbit.io/parser": "docker",
+					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -180,12 +190,35 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 									ContainerPort: containerListensOnPort,
 								},
 							},
+							Env: []corev1.EnvVar{
+								{
+									Name:  "AWS_REGION",
+									Value: "us-east-1",
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 	}
+
+	// Add awslogs configuration
+	// deployment.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
+	// 	Limits: corev1.ResourceList{
+	// 		"ephemeral-storage": resource.MustParse("1Gi"),
+	// 	},
+	// }
+	// deployment.Spec.Template.Annotations = map[string]string{
+	// 	"kubernetes.io/egress-bandwidth": "1M",
+	// }
+	// deployment.Spec.Template.Spec.Containers[0].Args = []string{
+	// 	"--log-driver=awslogs",
+	// 	"--log-opt=awslogs-region=us-east-1",
+	// 	fmt.Sprintf("--log-opt=awslogs-group=/aws/eks/%s/logs", appName),
+	// 	"--log-opt=awslogs-stream-prefix=container",
+	// }
+	
 
 	existingDeployment, err := clientset.AppsV1().Deployments("default").Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
@@ -282,11 +315,10 @@ func (s *EKSServiceImpl) ensureNodeGroupHasNodes(ctx context.Context, clusterNam
 	}
 
 	log.Printf("Node group %s details: Desired Size: %d, Min Size: %d, Max Size: %d",
-	nodeGroupName,
-	*nodeGroup.Nodegroup.ScalingConfig.DesiredSize,
-	*nodeGroup.Nodegroup.ScalingConfig.MinSize,
-	*nodeGroup.Nodegroup.ScalingConfig.MaxSize)
-
+		nodeGroupName,
+		*nodeGroup.Nodegroup.ScalingConfig.DesiredSize,
+		*nodeGroup.Nodegroup.ScalingConfig.MinSize,
+		*nodeGroup.Nodegroup.ScalingConfig.MaxSize)
 
 	asgName := *nodeGroup.Nodegroup.Resources.AutoScalingGroups[0].Name
 
@@ -326,8 +358,6 @@ func (s *EKSServiceImpl) ensureNodeGroupHasNodes(ctx context.Context, clusterNam
 	if err != nil {
 		return fmt.Errorf("failed waiting for ASG instance: %w", err)
 	}
-
-	
 
 	log.Printf("Waiting for nodes to be ready")
 	return s.waitForNodes(ctx, clusterName) // Changed this line
@@ -372,69 +402,68 @@ func (s *EKSServiceImpl) waitForASGInstance(ctx context.Context, asgClient *auto
 	return fmt.Errorf("timeout waiting for ASG instance to be running")
 }
 
-
 func (s *EKSServiceImpl) checkServiceQuotas(ctx context.Context) error {
-    sqClient := servicequotas.NewFromConfig(s.cfg)
+	sqClient := servicequotas.NewFromConfig(s.cfg)
 
-    quotas := []struct {
-        serviceName string
-        quotaCode   string
-        description string
-    }{
-        {"ec2", "L-1216C47A", "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances"},
-        {"autoscaling", "L-CDE20ADC", "Auto Scaling groups per region"},
-        {"eks", "L-1194D53C", "Clusters per Region"},
-    }
+	quotas := []struct {
+		serviceName string
+		quotaCode   string
+		description string
+	}{
+		{"ec2", "L-1216C47A", "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances"},
+		{"autoscaling", "L-CDE20ADC", "Auto Scaling groups per region"},
+		{"eks", "L-1194D53C", "Clusters per Region"},
+	}
 
-    for _, q := range quotas {
-        output, err := sqClient.GetServiceQuota(ctx, &servicequotas.GetServiceQuotaInput{
-            ServiceCode: aws.String(q.serviceName),
-            QuotaCode:   aws.String(q.quotaCode),
-        })
-        if err != nil {
-            log.Printf("Error checking quota for %s - %s: %v", q.serviceName, q.description, err)
-        } else {
-            log.Printf("Quota for %s - %s: %f", q.serviceName, q.description, *output.Quota.Value)
-        }
-    }
+	for _, q := range quotas {
+		output, err := sqClient.GetServiceQuota(ctx, &servicequotas.GetServiceQuotaInput{
+			ServiceCode: aws.String(q.serviceName),
+			QuotaCode:   aws.String(q.quotaCode),
+		})
+		if err != nil {
+			log.Printf("Error checking quota for %s - %s: %v", q.serviceName, q.description, err)
+		} else {
+			log.Printf("Quota for %s - %s: %f", q.serviceName, q.description, *output.Quota.Value)
+		}
+	}
 
-    return nil
+	return nil
 }
 
-
 func (s *EKSServiceImpl) checkEC2Errors(ctx context.Context) error {
-    ec2Client := ec2.NewFromConfig(s.cfg)
+	ec2Client := ec2.NewFromConfig(s.cfg)
 
-    output, err := ec2Client.DescribeInstanceStatus(ctx, &ec2.DescribeInstanceStatusInput{
-        IncludeAllInstances: aws.Bool(true),
-    })
-    if err != nil {
-        return fmt.Errorf("failed to describe instance status: %w", err)
-    }
+	output, err := ec2Client.DescribeInstanceStatus(ctx, &ec2.DescribeInstanceStatusInput{
+		IncludeAllInstances: aws.Bool(true),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to describe instance status: %w", err)
+	}
 
-    for _, status := range output.InstanceStatuses {
-        if status.InstanceState.Name == "pending" || status.InstanceState.Name == "running" {
-            continue
-        }
-        log.Printf("Instance %s is in state %s", *status.InstanceId, status.InstanceState.Name)
-        if len(status.Events) > 0 {
-            for _, event := range status.Events {
-                log.Printf("Instance %s event: %s", *status.InstanceId, *event.Description)
-            }
-        }
-    }
+	for _, status := range output.InstanceStatuses {
+		if status.InstanceState.Name == "pending" || status.InstanceState.Name == "running" {
+			continue
+		}
+		log.Printf("Instance %s is in state %s", *status.InstanceId, status.InstanceState.Name)
+		if len(status.Events) > 0 {
+			for _, event := range status.Events {
+				log.Printf("Instance %s event: %s", *status.InstanceId, *event.Description)
+			}
+		}
+	}
 
-    return nil
+	return nil
 }
 
 // creates a configmap for fluent bit. this is so we can stream logs from eks
 func createFluentBitConfigMap(ctx context.Context, clientset *kubernetes.Clientset) error {
-    configMap := &corev1.ConfigMap{
-        ObjectMeta: metav1.ObjectMeta{
-            Name: "fluent-bit-config",
-        },
-        Data: map[string]string{
-            "fluent-bit.conf": `
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fluent-bit-config",
+			Namespace: "kube-system",
+		},
+		Data: map[string]string{
+			"fluent-bit.conf": `
 [SERVICE]
     Flush        1
     Log_Level    info
@@ -461,22 +490,85 @@ func createFluentBitConfigMap(ctx context.Context, clientset *kubernetes.Clients
     log_group_name      /eks/${CLUSTER_NAME}/containers
     log_stream_prefix   ${HOST_NAME}-
     auto_create_group   true
-
-[OUTPUT]
-    Name                http
-    Match               *
-    Host                ${BACKEND_HOST}
-    Port                ${BACKEND_PORT}
-    URI                 /logs
-    Format              json
 `,
-        },
-    }
+			"parsers.conf": `
+[PARSER]
+    Name   docker
+    Format json
+    Time_Key time
+    Time_Format %Y-%m-%dT%H:%M:%S.%L
+    Time_Keep On
+`,
+		},
+	}
 
-    _, err := clientset.CoreV1().ConfigMaps("default").Create(ctx, configMap, metav1.CreateOptions{})
-    if err != nil {
-        return fmt.Errorf("failed to create Fluent Bit ConfigMap: %w", err)
-    }
+	_, err := clientset.CoreV1().ConfigMaps("kube-system").Create(ctx, configMap, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create Fluent Bit ConfigMap: %w", err)
+	}
 
-    return nil
+	return nil
+}
+
+func createFluentBitDaemonSet(ctx context.Context, clientset *kubernetes.Clientset) error {
+	daemonSet := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fluent-bit",
+			Namespace: "kube-system",
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"k8s-app": "fluent-bit",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"k8s-app": "fluent-bit",
+					},
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: "fluent-bit",
+					Containers: []corev1.Container{
+						{
+							Name:  "fluent-bit",
+							Image: "amazon/aws-for-fluent-bit:2.28.4",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("200Mi"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("50m"),
+									corev1.ResourceMemory: resource.MustParse("100Mi"),
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: "varlog", MountPath: "/var/log"},
+								{Name: "varlibdockercontainers", MountPath: "/var/lib/docker/containers", ReadOnly: true},
+								{Name: "fluent-bit-config", MountPath: "/fluent-bit/etc/"},
+							},
+							Env: []corev1.EnvVar{
+								{Name: "AWS_REGION", Value: "us-east-1"}, // Replace with your region
+								{Name: "CLUSTER_NAME", Value: "paas-1"}, // Replace with your cluster name
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{Name: "varlog", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/log"}}},
+						{Name: "varlibdockercontainers", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/lib/docker/containers"}}},
+						{Name: "fluent-bit-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "fluent-bit-config"}}}},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := clientset.AppsV1().DaemonSets("kube-system").Create(ctx, daemonSet, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create Fluent Bit DaemonSet: %w", err)
+	}
+
+	return nil
 }
