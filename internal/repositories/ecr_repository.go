@@ -6,7 +6,7 @@ import (
     "fmt"
     "os/exec"
     "strings"
-
+    "log"
     "github.com/aws/aws-sdk-go-v2/config"
     "github.com/aws/aws-sdk-go-v2/service/ecr"
 )
@@ -27,7 +27,16 @@ func NewECRRepository(ctx context.Context) (*ECRRepository, error) {
 }
 
 func (r *ECRRepository) PushImage(ctx context.Context, imageName string) (string, error) {
-    ecrImageName := fmt.Sprintf("590183673953.dkr.ecr.us-east-1.amazonaws.com/my-express-app:%s", imageName)
+    log.Println("Pushing image to ECR:", imageName)
+    // Extract the repository name and tag from the imageName
+    parts := strings.Split(imageName, ":")
+    if len(parts) != 2 {
+        return "", fmt.Errorf("invalid image name format: %s", imageName)
+    }
+    //repoName := parts[0]
+    tag := parts[1]
+
+    ecrImageName := fmt.Sprintf("590183673953.dkr.ecr.us-east-1.amazonaws.com/my-express-app:%s", tag)
 
     authOutput, err := r.client.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
     if err != nil {
@@ -38,7 +47,7 @@ func (r *ECRRepository) PushImage(ctx context.Context, imageName string) (string
     if err != nil {
         return "", fmt.Errorf("failed to decode auth token: %w", err)
     }
-    parts := strings.SplitN(string(authToken), ":", 2)
+    parts = strings.SplitN(string(authToken), ":", 2)
     if len(parts) != 2 {
         return "", fmt.Errorf("invalid auth token format")
     }
@@ -50,7 +59,8 @@ func (r *ECRRepository) PushImage(ctx context.Context, imageName string) (string
         return "", fmt.Errorf("failed to login to ECR: %w, output: %s", err, loginOut)
     }
 
-    tagCmd := exec.Command("docker", "tag", fmt.Sprintf("%s:latest", imageName), ecrImageName)
+    // Tag the local image with the ECR repository URI
+    tagCmd := exec.Command("docker", "tag", imageName, ecrImageName)
     if tagOut, err := tagCmd.CombinedOutput(); err != nil {
         return "", fmt.Errorf("failed to tag image: %w, output: %s", err, tagOut)
     }

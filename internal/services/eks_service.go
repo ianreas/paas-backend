@@ -171,6 +171,13 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 					"app": appName,
 				},
 			},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxSurge:       &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+				},
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -203,25 +210,9 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 		},
 	}
 
-	// Add awslogs configuration
-	// deployment.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
-	// 	Limits: corev1.ResourceList{
-	// 		"ephemeral-storage": resource.MustParse("1Gi"),
-	// 	},
-	// }
-	// deployment.Spec.Template.Annotations = map[string]string{
-	// 	"kubernetes.io/egress-bandwidth": "1M",
-	// }
-	// deployment.Spec.Template.Spec.Containers[0].Args = []string{
-	// 	"--log-driver=awslogs",
-	// 	"--log-opt=awslogs-region=us-east-1",
-	// 	fmt.Sprintf("--log-opt=awslogs-group=/aws/eks/%s/logs", appName),
-	// 	"--log-opt=awslogs-stream-prefix=container",
-	// }
-	
-
 	existingDeployment, err := clientset.AppsV1().Deployments("default").Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
+		// create the deployment here 
 		if k8serrors.IsNotFound(err) {
 			_, err = clientset.AppsV1().Deployments("default").Create(ctx, deployment, metav1.CreateOptions{})
 			if err != nil {
@@ -232,7 +223,9 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 			return fmt.Errorf("failed to check existing deployment: %w", err)
 		}
 	} else {
+		// update the deployment here
 		existingDeployment.Spec = deployment.Spec
+		log.Printf("Updating deployment %s with image: %s", appName, imageName)
 		_, err = clientset.AppsV1().Deployments("default").Update(ctx, existingDeployment, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update deployment: %w", err)
@@ -459,7 +452,7 @@ func (s *EKSServiceImpl) checkEC2Errors(ctx context.Context) error {
 func createFluentBitConfigMap(ctx context.Context, clientset *kubernetes.Clientset) error {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "fluent-bit-config",
+			Name:      "fluent-bit-config",
 			Namespace: "kube-system",
 		},
 		Data: map[string]string{
@@ -551,7 +544,7 @@ func createFluentBitDaemonSet(ctx context.Context, clientset *kubernetes.Clients
 							},
 							Env: []corev1.EnvVar{
 								{Name: "AWS_REGION", Value: "us-east-1"}, // Replace with your region
-								{Name: "CLUSTER_NAME", Value: "paas-1"}, // Replace with your cluster name
+								{Name: "CLUSTER_NAME", Value: "paas-1"},  // Replace with your cluster name
 							},
 						},
 					},

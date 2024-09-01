@@ -8,7 +8,7 @@ import (
     "os/exec"
     "path/filepath"
     "strings"
-
+    "time"
     "paas-backend/internal/utils"
 )
 
@@ -40,21 +40,22 @@ func (s *ECRServiceImpl) BuildAndPushToECR(ctx context.Context, repoFullName, ac
         return "", fmt.Errorf("dockerfile not found: %w", err)
     }
 
-    imageName := filepath.Base(repoFullName)
+    // Generate a unique tag using the current timestamp
+    timestamp := time.Now().Format("20060102150405")
+    imageName := fmt.Sprintf("%s:%s", repoFullName, timestamp)
+
+    // Build the Docker image
     if err := s.dockerService.BuildImage(dockerfilePath, imageName); err != nil {
         return "", fmt.Errorf("failed to build Docker image: %w", err)
     }
 
-    ecrImageName, err := s.ecrRepo.PushImage(ctx, imageName)
+    // Push the image to ECR
+    ecrImageURI, err := s.ecrRepo.PushImage(ctx, imageName)
     if err != nil {
         return "", fmt.Errorf("failed to push to ECR: %w", err)
     }
 
-    if err := s.eksService.DeployToEKS(ctx, ecrImageName, imageName, 3000); err != nil {
-        return "", fmt.Errorf("failed to deploy to EKS: %w", err)
-    }
-
-    return ecrImageName, nil
+    return ecrImageURI, nil
 }
 
 func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
