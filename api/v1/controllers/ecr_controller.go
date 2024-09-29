@@ -11,6 +11,7 @@ import (
 type BuildAndPushRequest struct {
 	RepoFullName string `json:"repoFullName"`
 	AccessToken  string `json:"accessToken"`
+	UserId       string `json:"userId"`
 }
 
 func BuildPushDeployApiHandler(ecrService services.ECRService, eksService services.EKSService) http.HandlerFunc {
@@ -29,7 +30,7 @@ func BuildPushDeployApiHandler(ecrService services.ECRService, eksService servic
 
 		appName := filepath.Base(req.RepoFullName)
 
-		err = eksService.DeployToEKS(r.Context(), ecrImageName, appName, 3000)
+		err = eksService.DeployToEKS(r.Context(), ecrImageName, appName, req.UserId, 3000)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Error deploying to EKS: %v", err), http.StatusInternalServerError)
 			return
