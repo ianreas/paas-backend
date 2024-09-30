@@ -2,25 +2,35 @@ package v1
 
 import (
 	"context"
+	"database/sql"
 
-	"net/http"
 	"paas-backend/api/v1/controllers"
 	"paas-backend/internal/repositories"
 	"paas-backend/internal/services"
+	"log"
+
+	// http package
+	"net/http"
 
 	"github.com/gorilla/mux"
 )
 
-// meow
-
 type Dependencies struct {
-	ECRService services.ECRService
-	EKSService services.EKSService
-	LogService services.LogService
+	ECRService     services.ECRService
+	EKSService     services.EKSService
+	LogService     services.LogService
+	AppsRepository repositories.ApplicationsRepository
 }
 
-// /
-func NewDependencies(ctx context.Context) (*Dependencies, error) {
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s %s", r.RemoteAddr, r.Method, r.URL)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// NewDependencies initializes all the required dependencies.
+func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 	dockerService := services.NewDockerService()
 	ecrRepo, err := repositories.NewECRRepository(ctx)
 	if err != nil {
@@ -39,36 +49,21 @@ func NewDependencies(ctx context.Context) (*Dependencies, error) {
 
 	ecrService := services.NewECRService(dockerService, ecrRepo, eksService)
 
+	appsRepo := repositories.NewApplicationsRepository(db)
+
 	return &Dependencies{
-		ECRService: ecrService,
-		EKSService: eksService,
-		LogService: logService,
+		ECRService:     ecrService,
+		EKSService:     eksService,
+		LogService:     logService,
+		AppsRepository: appsRepo,
 	}, nil
 }
 
 func RegisterRoutes(r *mux.Router, deps *Dependencies) {
+	r.Use(LoggingMiddleware)
 	r.HandleFunc("/items", controllers.GetItems).Methods("GET")
-	r.HandleFunc("/items/{id}", controllers.GetItem).Methods("GET")
-	r.HandleFunc("/items", controllers.CreateItem).Methods("POST")
-	r.HandleFunc("/items/{id}", controllers.UpdateItem).Methods("PUT")
-	r.HandleFunc("/items/{id}", controllers.DeleteItem).Methods("DELETE")
-	r.HandleFunc("/users", controllers.AddUserHandler).Methods("POST")
-	r.HandleFunc("/ec2", controllers.CreateEC2InstanceHandler).Methods("POST")
-	r.HandleFunc("/rds", controllers.CreateRDSInstanceHandler).Methods("POST")
-	r.HandleFunc("/deploy", controllers.DeployHandler).Methods("POST")
-	r.HandleFunc("/build-and-push-deploy", controllers.BuildPushDeployApiHandler(deps.ECRService, deps.EKSService)).Methods("POST")
-	r.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
-	}).Methods("GET")
+	// ... (other routes)
+	r.HandleFunc("/build-and-push-deploy", controllers.BuildPushDeployApiHandler(
+		deps.ECRService, deps.EKSService, deps.AppsRepository)).Methods("POST")
 	r.HandleFunc("/logs/{appName}", controllers.StreamLogsHandler(deps.LogService)).Methods("GET")
 }
-
-// thread safety for build-and-push route
-// 1) Dependencies Initialization in main.go:
-// deps, err := v1.NewDependencies(ctx) => the dependencies are initialized once at the application start, not per request
-// 2) route registration: routes are registered using the initialized dependencies
-// 3) handler function: the BuildAndPushToECRApiHandler is used which is a closure that captures the dependencies: ECRService and EKSService
-// this suggests that:
-// 1) each request gets its own instance of the handler function
-// 2) the services ECRService and EKSService are shared across the requests but they are designed as stateless and threadsafe:
-// 3) Any state specific to a request (like the request body) is handled within the scope of each request handler.

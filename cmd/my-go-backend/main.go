@@ -2,44 +2,63 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"paas-backend/api/v1"
-	"paas-backend/internal/db"
-	"paas-backend/internal/middleware"
-	"paas-backend/internal/services"
+
+	_ "github.com/lib/pq" // Import the PostgreSQL driver
 
 	"github.com/gorilla/mux"
+
+	"github.com/gorilla/handlers"
 )
 
 func main() {
-	r := mux.NewRouter()
-
-	// Initialize database
-	dataSourceName := "host=paas-backend-1.cbigmg0cgxs7.us-east-1.rds.amazonaws.com port=5432 user=postgres password=muhammedik10 dbname=paas_backend sslmode=require"
-	db.InitDB(dataSourceName)
-
-	// Initialize AWS services
+	// Create a background context
 	ctx := context.Background()
-	if err := services.InitAWSServices(ctx); err != nil {
-		log.Fatalf("Failed to initialize AWS services: %v", err)
+
+	// Initialize the database connection
+	dataSourceName := "host=paas-backend-1.cbigmg0cgxs7.us-east-1.rds.amazonaws.com port=5432 user=postgres password=muhammedik10 dbname=paas_backend sslmode=require"
+
+	db, err := sql.Open("postgres", dataSourceName)
+	if err != nil {
+		log.Fatalf("Failed to open database connection: %v", err)
+	}
+	defer db.Close()
+
+	// Verify the connection is alive
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 
-	// the dependancies are initialized once at the application start,
-	// not every time there is an api request
-	deps, err := v1.NewDependencies(ctx)
+	// Initialize dependencies with the database connection
+	deps, err := v1.NewDependencies(ctx, db)
 	if err != nil {
 		log.Fatalf("Failed to initialize dependencies: %v", err)
 	}
 
-	// Middleware
-	r.Use(middleware.LoggingMiddleware)
+	// Set up the router
+	r := mux.NewRouter()
+
+	// Middleware (if any)
+	// r.Use(middleware.YourMiddleware)
 
 	// Register routes
-	v1.RegisterRoutes(r.PathPrefix("/api/v1").Subrouter(), deps)
+	v1.RegisterRoutes(r, deps)
 
-	// Start server
+	allowedOrigins := []string{"*"}
+
+	// Create the CORS middleware handler
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins(allowedOrigins),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+	)
+
+	// Start the server
 	log.Println("Server listening on port 3005")
-	log.Fatal(http.ListenAndServe(":3005", r))
+	if err := http.ListenAndServe(":3005", corsHandler(r)); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
-
