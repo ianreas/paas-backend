@@ -66,4 +66,5 @@ func RegisterRoutes(r *mux.Router, deps *Dependencies) {
 	r.HandleFunc("/build-and-push-deploy", controllers.BuildPushDeployApiHandler(
 		deps.ECRService, deps.EKSService, deps.AppsRepository)).Methods("POST")
 	r.HandleFunc("/logs/{appName}", controllers.StreamLogsHandler(deps.LogService)).Methods("GET")
+	
 }

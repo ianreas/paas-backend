@@ -18,8 +18,8 @@ type BuildAndPushRequest struct {
 	GithubUsername string `json:"githubUsername"`
 	ContainerPort   int32  `json:"containerPort,omitempty"`
 	Replicas        *int32  `json:"replicas,omitempty"`
-    CPU             *string `json:"cpu,omitempty"`
-    Memory          *string `json:"memory,omitempty"`
+    CPU             *string `json:"cpuAllocation,omitempty"`
+    Memory          *string `json:"memoryAllocation,omitempty"`
 }
 
 // BuildPushDeployApiHandler handles the build, push, deploy, and records the application in the database.
