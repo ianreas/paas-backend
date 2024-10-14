@@ -45,7 +45,9 @@ func NewEKSService(ctx context.Context) (EKSService, error) {
 }
 
 // Implement the DeployToEKS method for EKSServiceImpl
-func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName string, userId string, containerListensOnPort int32) error {
+func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName string, userId string, containerListensOnPort int32, replicas *int32,
+	cpu *string,
+	memory *string) error {
 	clusterName := "paas-1"
 
 	log.Printf("Starting deployment to EKS for app: %s", appName)
@@ -67,7 +69,7 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 		return fmt.Errorf("failed to ensure namespace exists: %w", err)
 	}
 
-	if err := s.createOrUpdateDeployment(ctx, clientset, appName, imageName, userId, containerListensOnPort); err != nil {
+	if err := s.createOrUpdateDeployment(ctx, clientset, appName, imageName, userId, containerListensOnPort, replicas, cpu, memory); err != nil {
 		return err
 	}
 
@@ -163,13 +165,38 @@ func (s *EKSServiceImpl) getKubernetesClientset(ctx context.Context, clusterName
 // creates a kubernetes deployment in eks
 // takes the appName, imageName, and the port as arguments
 // if the deployment with that appName exists in the default namespace, just updates the deployment
-func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset *kubernetes.Clientset, appName, imageName, userId string,  containerListensOnPort int32) error {
+// createOrUpdateDeployment creates or updates a Kubernetes deployment in EKS
+func (s *EKSServiceImpl) createOrUpdateDeployment(
+	ctx context.Context,
+	clientset *kubernetes.Clientset,
+	appName, imageName, userId string,
+	containerPort int32,
+	replicas *int32,
+	cpu *string,
+	memory *string,
+) error {
+	// Set default values if optional parameters are nil
+	replicaCount := int32(1)
+	if replicas != nil {
+		replicaCount = *replicas
+	}
+
+	cpuRequest := "100m"
+	if cpu != nil {
+		cpuRequest = *cpu
+	}
+
+	memoryRequest := "128Mi"
+	if memory != nil {
+		memoryRequest = *memory
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: appName,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: aws.Int32(1),
+			Replicas: &replicaCount,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": appName,
@@ -198,7 +225,17 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 							Image: imageName,
 							Ports: []corev1.ContainerPort{
 								{
-									ContainerPort: containerListensOnPort,
+									ContainerPort: containerPort,
+								},
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+									corev1.ResourceMemory: resource.MustParse(memoryRequest),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+									corev1.ResourceMemory: resource.MustParse(memoryRequest),
 								},
 							},
 							Env: []corev1.EnvVar{
@@ -214,35 +251,34 @@ func (s *EKSServiceImpl) createOrUpdateDeployment(ctx context.Context, clientset
 		},
 	}
 
+	// Check if the deployment exists
 	existingDeployment, err := clientset.AppsV1().Deployments(userId).Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
-		// create the deployment here 
 		if k8serrors.IsNotFound(err) {
+			// Create the deployment
 			_, err = clientset.AppsV1().Deployments(userId).Create(ctx, deployment, metav1.CreateOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to create deployment: %w", err)
 			}
-			// TODO: create a new deployment in the database here
-			
-			fmt.Printf("Created new deployment: %s\n", appName)
+			log.Printf("Created new deployment: %s", appName)
 		} else {
 			return fmt.Errorf("failed to check existing deployment: %w", err)
 		}
 	} else {
-		// update the deployment here
+		// Update the deployment
 		existingDeployment.Spec = deployment.Spec
 		log.Printf("Updating deployment %s with image: %s", appName, imageName)
 		_, err = clientset.AppsV1().Deployments(userId).Update(ctx, existingDeployment, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update deployment: %w", err)
 		}
-		fmt.Printf("Updated existing deployment: %s\n", appName)
+		log.Printf("Updated existing deployment: %s", appName)
 	}
 
 	return nil
 }
 
-func (s *EKSServiceImpl) createOrUpdateService(ctx context.Context, clientset *kubernetes.Clientset, appName string,userId string,  containerListensOnPort int32) error {
+func (s *EKSServiceImpl) createOrUpdateService(ctx context.Context, clientset *kubernetes.Clientset, appName string, userId string, containerListensOnPort int32) error {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: appName,
@@ -286,19 +322,19 @@ func (s *EKSServiceImpl) createOrUpdateService(ctx context.Context, clientset *k
 
 // if the namespace doesnt exist, it creates a new namespace with that name
 func (s *EKSServiceImpl) ensureNamespaceExists(ctx context.Context, clientset *kubernetes.Clientset, userId string) error {
-    namespace := &corev1.Namespace{
-        ObjectMeta: metav1.ObjectMeta{
-            Name: userId,
-        },
-    }
-    _, err := clientset.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: userId,
+		},
+	}
+	_, err := clientset.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	// if (k8serrors.IsAlreadyExists(err)){
 	// 	fmt.Printf("Namespace %s exists, so we don't create a new one", userId)
 	// }
-    if err != nil && !k8serrors.IsAlreadyExists(err) {
-        return fmt.Errorf("failed to create namespace: %w", err)
-    }
-    return nil
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create namespace: %w", err)
+	}
+	return nil
 }
 
 func (s *EKSServiceImpl) ensureNodeGroupHasNodes(ctx context.Context, clusterName string) error {

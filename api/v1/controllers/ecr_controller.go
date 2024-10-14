@@ -16,6 +16,10 @@ type BuildAndPushRequest struct {
 	AccessToken    string `json:"accessToken"`
 	UserId         string `json:"userId"`
 	GithubUsername string `json:"githubUsername"`
+	ContainerPort   int32  `json:"containerPort,omitempty"`
+	Replicas        *int32  `json:"replicas,omitempty"`
+    CPU             *string `json:"cpu,omitempty"`
+    Memory          *string `json:"memory,omitempty"`
 }
 
 // BuildPushDeployApiHandler handles the build, push, deploy, and records the application in the database.
@@ -45,7 +49,7 @@ func BuildPushDeployApiHandler(
 		appName := filepath.Base(req.RepoFullName)
 
 		// Deploy the image to EKS
-		err = eksService.DeployToEKS(r.Context(), ecrImageName, appName, req.UserId, 3000)
+		err = eksService.DeployToEKS(r.Context(), ecrImageName, appName, req.UserId, req.ContainerPort, req.Replicas, req.CPU, req.Memory)
 		if err != nil {
 			log.Printf("Error deploying to EKS for app %s: %v", appName, err)
 			http.Error(w, fmt.Sprintf("Error deploying to EKS: %v", err), http.StatusInternalServerError)
@@ -60,6 +64,10 @@ func BuildPushDeployApiHandler(
 			GithubUsername: req.GithubUsername,
 			UserID:         req.UserId,
 			ProjectName:    appName,
+			ContainerPort:  req.ContainerPort,
+			Replicas:       req.Replicas,
+			CPU:            req.CPU,
+			Memory:         req.Memory,
 		}
 		appID, err := appsRepo.CreateOrUpdateApplication(r.Context(), app)
 		if err != nil {

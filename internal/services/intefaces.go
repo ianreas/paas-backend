@@ -15,7 +15,9 @@ type ECRService interface {
 }
 
 type EKSService interface {
-    DeployToEKS(ctx context.Context, imageName, appName string, userId string, containerListensOnPort int32) error
+	DeployToEKS(ctx context.Context, imageName, appName string, userId string, containerListensOnPort int32, replicas *int32,
+		cpu *string,
+		memory *string) error
 }
 
 // type EKSInfoService interface {

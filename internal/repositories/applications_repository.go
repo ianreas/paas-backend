@@ -11,6 +11,10 @@ type Application struct {
 	GithubUsername string
 	UserID         string
 	ProjectName    string
+	ContainerPort  int32   // Optional field
+	Replicas       *int32  // Optional field
+	CPU            *string // Optional field
+	Memory         *string // Optional field
 }
 
 // ApplicationsRepository defines methods for interacting with the applications table.
