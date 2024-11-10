@@ -62,7 +62,6 @@ func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 func RegisterRoutes(r *mux.Router, deps *Dependencies) {
 	r.Use(LoggingMiddleware)
 	r.HandleFunc("/items", controllers.GetItems).Methods("GET")
-	// ... (other routes)
 	r.HandleFunc("/build-and-push-deploy", controllers.BuildPushDeployApiHandler(
 		deps.ECRService, deps.EKSService, deps.AppsRepository)).Methods("POST")
 	r.HandleFunc("/logs/{appName}", controllers.StreamLogsHandler(deps.LogService)).Methods("GET")
