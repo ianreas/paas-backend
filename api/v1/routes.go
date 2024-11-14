@@ -12,6 +12,10 @@ import (
 	// http package
 	"net/http"
 
+	"fmt"
+
+	 "github.com/aws/aws-sdk-go-v2/config"
+
 	"github.com/gorilla/mux"
 )
 
@@ -20,6 +24,7 @@ type Dependencies struct {
 	EKSService     services.EKSService
 	LogService     services.LogService
 	AppsRepository repositories.ApplicationsRepository
+	MonitoringService services.MonitoringService
 }
 
 func LoggingMiddleware(next http.Handler) http.Handler {
@@ -47,6 +52,16 @@ func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 		return nil, err
 	}
 
+	 // Add AWS config initialization
+	 cfg, err := config.LoadDefaultConfig(ctx, 
+        config.WithRegion("us-east-1"), // Replace with your AWS region
+    )
+    if err != nil {
+        return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)
+    }
+
+	monitoringService := services.NewMonitoringService(cfg)
+
 	ecrService := services.NewECRService(dockerService, ecrRepo, eksService)
 
 	appsRepo := repositories.NewApplicationsRepository(db)
@@ -56,6 +71,7 @@ func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 		EKSService:     eksService,
 		LogService:     logService,
 		AppsRepository: appsRepo,
+		MonitoringService: monitoringService,  // Add this line
 	}, nil
 }
 
@@ -65,5 +81,6 @@ func RegisterRoutes(r *mux.Router, deps *Dependencies) {
 	r.HandleFunc("/build-and-push-deploy", controllers.BuildPushDeployApiHandler(
 		deps.ECRService, deps.EKSService, deps.AppsRepository)).Methods("POST")
 	r.HandleFunc("/logs/{appName}", controllers.StreamLogsHandler(deps.LogService)).Methods("GET")
+	r.HandleFunc("/metrics", controllers.GetMetricsHandler(deps.MonitoringService)).Methods("POST")
 	
 }
