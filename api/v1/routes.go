@@ -4,17 +4,17 @@ import (
 	"context"
 	"database/sql"
 
+	"log"
 	"paas-backend/api/v1/controllers"
 	"paas-backend/internal/repositories"
 	"paas-backend/internal/services"
-	"log"
 
 	// http package
 	"net/http"
 
 	"fmt"
 
-	 "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/config"
 
 	"github.com/gorilla/mux"
 )
@@ -25,11 +25,12 @@ type Dependencies struct {
 	LogService     services.LogService
 	AppsRepository repositories.ApplicationsRepository
 	MonitoringService services.MonitoringService
+	GitHubService services.GitHubService
 }
 
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s", r.RemoteAddr, r.Method, r.URL)
+		log.Printf("Incoming request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -66,12 +67,15 @@ func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 
 	appsRepo := repositories.NewApplicationsRepository(db)
 
+	githubService := services.NewGitHubService()
+
 	return &Dependencies{
 		ECRService:     ecrService,
 		EKSService:     eksService,
 		LogService:     logService,
 		AppsRepository: appsRepo,
-		MonitoringService: monitoringService,  // Add this line
+		MonitoringService: monitoringService,  
+		GitHubService:    githubService, 
 	}, nil
 }
 
@@ -82,5 +86,5 @@ func RegisterRoutes(r *mux.Router, deps *Dependencies) {
 		deps.ECRService, deps.EKSService, deps.AppsRepository)).Methods("POST")
 	r.HandleFunc("/logs/{appName}", controllers.StreamLogsHandler(deps.LogService)).Methods("GET")
 	r.HandleFunc("/metrics", controllers.GetMetricsHandler(deps.MonitoringService)).Methods("POST")
-	
+	r.HandleFunc("/create-workflow", controllers.CreateWorkflowHandler(deps.GitHubService)).Methods("POST")
 }

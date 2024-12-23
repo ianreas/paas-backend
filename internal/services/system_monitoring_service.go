@@ -4,6 +4,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -41,6 +42,7 @@ func (s *MonitoringServiceImpl) GetMetrics(ctx context.Context, clusterName, nam
 	// Use the correct namespace
 	metricNamespace := "ContainerInsights"
 
+
 	// Define metric queries with updated dimensions
 	queries := []struct {
 		name       string
@@ -51,6 +53,17 @@ func (s *MonitoringServiceImpl) GetMetrics(ctx context.Context, clusterName, nam
 		{
 			name:       "CPUUtilization",
 			metricName: "container_cpu_utilization",
+			stat:       "Average",
+			dimensions: []types.Dimension{
+				{Name: aws.String("ClusterName"), Value: aws.String(clusterName)},
+				{Name: aws.String("Namespace"), Value: aws.String(namespace)},
+				{Name: aws.String("PodName"), Value: aws.String(appName)},
+				{Name: aws.String("ContainerName"), Value: aws.String(appName)},
+			},
+		},
+		{
+			name:       "MemoryUtilization",
+			metricName: "container_memory_utilization",
 			stat:       "Average",
 			dimensions: []types.Dimension{
 				{Name: aws.String("ClusterName"), Value: aws.String(clusterName)},
@@ -106,12 +119,18 @@ func (s *MonitoringServiceImpl) GetMetrics(ctx context.Context, clusterName, nam
 	result := &MetricResponse{}
 	for i, metricResult := range output.MetricDataResults {
 		var metrics []MetricData
+		// Create metrics slice
 		for j, timestamp := range metricResult.Timestamps {
 			metrics = append(metrics, MetricData{
 				Timestamp: timestamp,
 				Value:     metricResult.Values[j],
 			})
 		}
+
+		// Sort metrics by timestamp
+		sort.Slice(metrics, func(i, j int) bool {
+			return metrics[i].Timestamp.Before(metrics[j].Timestamp)
+		})
 
 		switch queries[i].name {
 		case "CPUUtilization":
