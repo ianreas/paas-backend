@@ -17,6 +17,13 @@ import (
 )
 
 func main() {
+	port := os.Getenv("PORT")
+    if port == "" {
+        port = "3005" // fallback port
+    }
+
+    log.Printf("Server listening on port %s", port)
+
 	// Create a background context
 	ctx := context.Background()
 
@@ -58,12 +65,6 @@ func main() {
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 	)
 
-	port := os.Getenv("PORT")
-    if port == "" {
-        port = "3005" // fallback port
-    }
-
-    log.Printf("Server listening on port %s", port)
 
 	// Start the server
 	log.Println("Server listening on port 3005")
@@ -71,3 +72,4 @@ func main() {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
+
