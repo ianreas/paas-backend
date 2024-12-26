@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"paas-backend/api/v1"
+	v1 "paas-backend/api/v1"
 
 	_ "github.com/lib/pq" // Import the PostgreSQL driver
 
 	"github.com/gorilla/mux"
+
+	"os"
 
 	"github.com/gorilla/handlers"
 )
@@ -55,6 +57,13 @@ func main() {
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 	)
+
+	port := os.Getenv("PORT")
+    if port == "" {
+        port = "3005" // fallback port
+    }
+
+    log.Printf("Server listening on port %s", port)
 
 	// Start the server
 	log.Println("Server listening on port 3005")
