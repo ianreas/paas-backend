@@ -1,1 +1,1 @@
-web: ./bin/paas-backend
+web: paas-backend
