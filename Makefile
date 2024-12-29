@@ -9,5 +9,7 @@ build:
 clean:
 	rm -rf $(BIN_DIR)
 
-heroku: build
-	heroku container:push web
+ build:
+   	mkdir -p bin
+   	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+   	go build -v -o bin/paas-backend cmd/my-go-backend/main.go
