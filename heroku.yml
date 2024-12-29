@@ -1,9 +1,0 @@
-build:
-  languages:
-    - go
-  scripts:
-    # This command compiles your Go code and places the resulting binary where Heroku expects it:
-    - go build -o bin/paas-backend cmd/my-go-backend/main.go
-
-run:
-  web: ./bin/paas-backend
