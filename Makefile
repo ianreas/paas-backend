@@ -1,13 +1,13 @@
 GO_BUILD_ENV := CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-DOCKER_BUILD=$(shell pwd)/.docker_build
-DOCKER_CMD=$(DOCKER_BUILD)/paas-backend
+BIN_DIR := bin
+BIN_PATH := $(BIN_DIR)/paas-backend
 
-$(DOCKER_CMD): clean
-	mkdir -p $(DOCKER_BUILD)
-	$(GO_BUILD_ENV) go build -v -o $(DOCKER_CMD) .
+build:
+	mkdir -p $(BIN_DIR)
+	$(GO_BUILD_ENV) go build -v -o $(BIN_PATH) cmd/my-go-backend/main.go
 
 clean:
-	rm -rf $(DOCKER_BUILD)
+	rm -rf $(BIN_DIR)
 
-heroku: $(DOCKER_CMD)
+heroku: build
 	heroku container:push web
