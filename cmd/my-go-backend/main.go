@@ -36,7 +36,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// Verify the connection is alive
+	// Verify the connection is alivee
 	if err := db.Ping(); err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
