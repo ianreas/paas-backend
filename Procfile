@@ -1,1 +1,1 @@
-web: bin/paas-backend
+web: bin/my-go-backend
