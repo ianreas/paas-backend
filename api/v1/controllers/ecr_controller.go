@@ -40,13 +40,6 @@ func BuildPushDeployApiHandler(
 
 		log.Printf("Received request to build and deploy app: %s by user: %s", req.RepoFullName, req.UserId)
 
-		// Check if git is installed
-		if _, err := exec.LookPath("git"); err != nil {
-			log.Printf("Error checking if git is installed: %v", err)
-			http.Error(w, fmt.Sprintf("Error checking if git is installed: %v", err), http.StatusInternalServerError)
-			return
-		}
-
 		// Build and push the image to ECR
 		ecrImageName, err := ecrService.BuildAndPushToECR(r.Context(), req.RepoFullName, req.AccessToken)
 		if err != nil {
@@ -62,6 +55,13 @@ func BuildPushDeployApiHandler(
 		if err != nil {
 			log.Printf("Error deploying to EKS for app %s: %v", appName, err)
 			http.Error(w, fmt.Sprintf("Error deploying to EKS: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Check if git is installed
+		if _, err := exec.LookPath("git"); err != nil {
+			log.Printf("Error checking if git is installed: %v", err)
+			http.Error(w, fmt.Sprintf("Error checking if git is installed: %v", err), http.StatusInternalServerError)
 			return
 		}
 
