@@ -65,6 +65,17 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 		return fmt.Errorf("failed to get Kubernetes clientset: %w", err)
 	}
 
+	 // Apply the node-setup DaemonSet
+	 if err := s.applyNodeSetupDaemonSet(ctx, clientset); err != nil {
+        return fmt.Errorf("failed to apply node-setup DaemonSet: %w", err)
+    }
+
+    // Wait for DaemonSet to be ready
+    if err := s.waitForDaemonSetReady(ctx, clientset, "kube-system", "node-setup"); err != nil {
+        return fmt.Errorf("failed waiting for node-setup DaemonSet: %w", err)
+    }
+
+
 	if err := s.ensureNamespaceExists(ctx, clientset, userId); err != nil {
 		return fmt.Errorf("failed to ensure namespace exists: %w", err)
 	}
@@ -413,6 +424,109 @@ func (s *EKSServiceImpl) ensureNodeGroupHasNodes(ctx context.Context, clusterNam
 
 	log.Printf("Waiting for nodes to be ready")
 	return s.waitForNodes(ctx, clusterName) // Changed this line
+}
+
+
+func (s *EKSServiceImpl) applyNodeSetupDaemonSet(ctx context.Context, clientset *kubernetes.Clientset) error {
+    daemonSet := &appsv1.DaemonSet{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      "node-setup",
+            Namespace: "kube-system",
+        },
+        Spec: appsv1.DaemonSetSpec{
+            Selector: &metav1.LabelSelector{
+                MatchLabels: map[string]string{
+                    "name": "node-setup",
+                },
+            },
+            Template: corev1.PodTemplateSpec{
+                ObjectMeta: metav1.ObjectMeta{
+                    Labels: map[string]string{
+                        "name": "node-setup",
+                    },
+                },
+                Spec: corev1.PodSpec{
+                    Tolerations: []corev1.Toleration{
+                        {
+                            Operator: corev1.TolerationOperator("Exists"),
+                            Effect:   corev1.TaintEffect("NoSchedule"),
+                        },
+                    },
+                    InitContainers: []corev1.Container{
+                        {
+                            Name:  "install-deps",
+                            Image: "amazonlinux:2",
+                            Command: []string{
+                                "/bin/bash",
+                                "-c",
+                                `yum update -y && 
+                                 yum install -y git docker && 
+                                 echo 'export PATH=$PATH:/usr/bin' >> /etc/profile && 
+                                 echo 'export PATH=$PATH:/usr/bin' >> /etc/bashrc && 
+                                 systemctl enable docker && 
+                                 systemctl start docker`,
+                            },
+                            SecurityContext: &corev1.SecurityContext{
+                                Privileged: aws.Bool(true),
+                            },
+                            VolumeMounts: []corev1.VolumeMount{
+                                {
+                                    Name:      "host-root",
+                                    MountPath: "/host",
+                                },
+                            },
+                        },
+                    },
+                    Containers: []corev1.Container{
+                        {
+                            Name:  "pause",
+                            Image: "gcr.io/google_containers/pause:3.2",
+                        },
+                    },
+                    Volumes: []corev1.Volume{
+                        {
+                            Name: "host-root",
+                            VolumeSource: corev1.VolumeSource{
+                                HostPath: &corev1.HostPathVolumeSource{
+                                    Path: "/",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    _, err := clientset.AppsV1().DaemonSets("kube-system").Create(ctx, daemonSet, metav1.CreateOptions{})
+    if err != nil {
+        if k8serrors.IsAlreadyExists(err) {
+            _, err = clientset.AppsV1().DaemonSets("kube-system").Update(ctx, daemonSet, metav1.UpdateOptions{})
+            return err
+        }
+        return err
+    }
+    return nil
+}
+
+func (s *EKSServiceImpl) waitForDaemonSetReady(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+    for i := 0; i < 30; i++ { // Wait up to 5 minutes
+        ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+        if err != nil {
+            return err
+        }
+
+        if ds.Status.NumberReady == ds.Status.DesiredNumberScheduled {
+            return nil
+        }
+
+        log.Printf("Waiting for DaemonSet %s to be ready (%d/%d ready)",
+            name, ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+
+        time.Sleep(10 * time.Second)
+    }
+
+    return fmt.Errorf("timeout waiting for DaemonSet %s to be ready", name)
 }
 
 func (s *EKSServiceImpl) waitForASGInstance(ctx context.Context, asgClient *autoscaling.Client, ec2Client *ec2.Client, asgName string) error {

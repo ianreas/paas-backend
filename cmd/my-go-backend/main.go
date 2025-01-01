@@ -66,8 +66,6 @@ func main() {
 	)
 
 
-	// Start the server
-	log.Println("Server listening on port 3005")
 	if err := http.ListenAndServe(":"+port, corsHandler(r)); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
