@@ -204,8 +204,8 @@ func createPullRequest(ctx context.Context, client *github.Client, req WorkflowR
 	return pr, nil
 }
 
-// Templates for the workflow and PR body
-const workflowTemplate = `name: Deploy to PaaS
+const workflowTemplate = 
+`name: Deploy to PaaS
 
 on:
   push:
@@ -263,24 +263,24 @@ jobs:
         run: |
           if [ ! -f "Dockerfile" ]; then
             echo "No Dockerfile found, creating one..."
-            cat > Dockerfile << 'EOF'
-            FROM node:20-alpine AS builder
-            WORKDIR /app
-            COPY package*.json ./
-            RUN npm install
-            COPY . .
-            RUN npm run build
+            cat > Dockerfile << EOF
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
 
-            FROM node:20-alpine AS runner
-            WORKDIR /app
-            COPY --from=builder /app/.next ./.next
-            COPY --from=builder /app/node_modules ./node_modules
-            COPY --from=builder /app/package.json ./package.json
-            COPY --from=builder /app/public ./public
+FROM node:20-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/public ./public
 
-            EXPOSE 3000
-            CMD ["npm", "start"]
-            EOF
+EXPOSE 3000
+CMD ["npm", "start"]
+EOF
           fi
 
   deploy:
@@ -295,8 +295,102 @@ jobs:
           curl -X POST "${PAAS_API_URL}/api/v1/build-and-push-deploy" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer ${PAAS_ACCESS_TOKEN}" \
-          -d "{\"repoFullName\":\"${{ github.repository }}\",\"accessToken\":\"${{ github.token }}\"}"
-`
+          -d "{\"repoFullName\":\"${{ github.repository }}\",\"accessToken\":\"${{ github.token }}\"}"`
+
+
+// Templates for the workflow and PR body
+// const workflowTemplate = `name: Deploy to PaaS
+
+// on:
+//   push:
+//     branches: [ main, staging ]
+//   pull_request:
+//     branches: [ main, staging ]
+
+// env:
+//   PAAS_API_URL: ${{ secrets.PAAS_API_URL }}
+//   PAAS_ACCESS_TOKEN: ${{ secrets.PAAS_ACCESS_TOKEN }}
+
+// jobs:
+//   validate:
+//     runs-on: ubuntu-latest
+//     steps:
+//       - uses: actions/checkout@v4
+      
+//       - name: Detect package manager
+//         id: detect-package-manager
+//         run: |
+//           if [ -f "./yarn.lock" ]; then
+//             echo "manager=yarn" >> $GITHUB_OUTPUT
+//           elif [ -f "./package-lock.json" ]; then
+//             echo "manager=npm" >> $GITHUB_OUTPUT
+//           else
+//             echo "No lock file found"
+//             exit 1
+//           fi
+      
+//       - name: Setup Node.js
+//         uses: actions/setup-node@v4
+//         with:
+//           node-version: '20'
+//           cache: ${{ steps.detect-package-manager.outputs.manager }}
+
+//       - name: Install dependencies
+//         run: ${{ steps.detect-package-manager.outputs.manager }} install
+      
+//       - name: Type check
+//         run: ${{ steps.detect-package-manager.outputs.manager }} run type-check || true
+      
+//       - name: Lint
+//         run: ${{ steps.detect-package-manager.outputs.manager }} run lint || true
+      
+//       - name: Test
+//         run: ${{ steps.detect-package-manager.outputs.manager }} test || true
+
+//   build:
+//     needs: validate
+//     runs-on: ubuntu-latest
+//     steps:
+//       - uses: actions/checkout@v4
+
+//       - name: Build validation
+//         run: |
+//           if [ ! -f "Dockerfile" ]; then
+//             echo "No Dockerfile found, creating one..."
+//             cat > Dockerfile << 'EOF'
+//             FROM node:20-alpine AS builder
+//             WORKDIR /app
+//             COPY package*.json ./
+//             RUN npm install
+//             COPY . .
+//             RUN npm run build
+
+//             FROM node:20-alpine AS runner
+//             WORKDIR /app
+//             COPY --from=builder /app/.next ./.next
+//             COPY --from=builder /app/node_modules ./node_modules
+//             COPY --from=builder /app/package.json ./package.json
+//             COPY --from=builder /app/public ./public
+
+//             EXPOSE 3000
+//             CMD ["npm", "start"]
+//             EOF
+//           fi
+
+//   deploy:
+//     needs: build
+//     runs-on: ubuntu-latest
+//     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+//     steps:
+//       - uses: actions/checkout@v4
+
+//       - name: Deploy to PaaS
+//         run: |
+//           curl -X POST "${PAAS_API_URL}/api/v1/build-and-push-deploy" \
+//           -H "Content-Type: application/json" \
+//           -H "Authorization: Bearer ${PAAS_ACCESS_TOKEN}" \
+//           -d "{\"repoFullName\":\"${{ github.repository }}\",\"accessToken\":\"${{ github.token }}\"}"
+// `
 
 const prTemplate = `# 🚀 Automated CI/CD Setup for PaaS Deployment
 
