@@ -69,6 +69,8 @@ func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 
 	githubService := services.NewGitHubService()
 
+	
+
 	return &Dependencies{
 		ECRService:     ecrService,
 		EKSService:     eksService,

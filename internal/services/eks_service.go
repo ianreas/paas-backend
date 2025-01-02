@@ -33,16 +33,16 @@ type EKSServiceImpl struct {
 	cfg aws.Config
 }
 
-func NewEKSService(ctx context.Context) (EKSService, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS config: %w", err)
-	}
+// func NewEKSService(ctx context.Context) (EKSService, error) {
+// 	cfg, err := config.LoadDefaultConfig(ctx)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+// 	}
 
-	//cfg.ClientLogMode = aws.LogRequestWithBody | aws.LogResponseWithBody
+// 	//cfg.ClientLogMode = aws.LogRequestWithBody | aws.LogResponseWithBody
 
-	return &EKSServiceImpl{cfg: cfg}, nil
-}
+// 	return &EKSServiceImpl{cfg: cfg}, nil
+// }
 
 // Implement the DeployToEKS method for EKSServiceImpl
 func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName string, userId string, containerListensOnPort int32, replicas *int32,
@@ -66,14 +66,14 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 	}
 
 	 // Apply the node-setup DaemonSet
-	 if err := s.applyNodeSetupDaemonSet(ctx, clientset); err != nil {
-        return fmt.Errorf("failed to apply node-setup DaemonSet: %w", err)
-    }
+	//  if err := s.applyNodeSetupDaemonSet(ctx, clientset); err != nil {
+    //     return fmt.Errorf("failed to apply node-setup DaemonSet: %w", err)
+    // }
 
-    // Wait for DaemonSet to be ready
-    if err := s.waitForDaemonSetReady(ctx, clientset, "kube-system", "node-setup"); err != nil {
-        return fmt.Errorf("failed waiting for node-setup DaemonSet: %w", err)
-    }
+    // // Wait for DaemonSet to be ready
+    // if err := s.waitForDaemonSetReady(ctx, clientset, "kube-system", "node-setup"); err != nil {
+    //     return fmt.Errorf("failed waiting for node-setup DaemonSet: %w", err)
+    // }
 
 
 	if err := s.ensureNamespaceExists(ctx, clientset, userId); err != nil {
@@ -509,25 +509,25 @@ func (s *EKSServiceImpl) applyNodeSetupDaemonSet(ctx context.Context, clientset 
     return nil
 }
 
-func (s *EKSServiceImpl) waitForDaemonSetReady(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
-    for i := 0; i < 30; i++ { // Wait up to 5 minutes
-        ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
-        if err != nil {
-            return err
-        }
+// func (s *EKSServiceImpl) waitForDaemonSetReady(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+//     for i := 0; i < 30; i++ { // Wait up to 5 minutes
+//         ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+//         if err != nil {
+//             return err
+//         }
 
-        if ds.Status.NumberReady == ds.Status.DesiredNumberScheduled {
-            return nil
-        }
+//         if ds.Status.NumberReady == ds.Status.DesiredNumberScheduled {
+//             return nil
+//         }
 
-        log.Printf("Waiting for DaemonSet %s to be ready (%d/%d ready)",
-            name, ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+//         log.Printf("Waiting for DaemonSet %s to be ready (%d/%d ready)",
+//             name, ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
 
-        time.Sleep(10 * time.Second)
-    }
+//         time.Sleep(10 * time.Second)
+//     }
 
-    return fmt.Errorf("timeout waiting for DaemonSet %s to be ready", name)
-}
+//     return fmt.Errorf("timeout waiting for DaemonSet %s to be ready", name)
+// }
 
 func (s *EKSServiceImpl) waitForASGInstance(ctx context.Context, asgClient *autoscaling.Client, ec2Client *ec2.Client, asgName string) error {
 	for i := 0; i < 30; i++ { // Wait for up to 15 minutes
@@ -737,4 +737,133 @@ func createFluentBitDaemonSet(ctx context.Context, clientset *kubernetes.Clients
 	}
 
 	return nil
+}
+
+
+
+func NewEKSService(ctx context.Context) (EKSService, error) {
+    cfg, err := config.LoadDefaultConfig(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("failed to load AWS config: %w", err)
+    }
+
+    service := &EKSServiceImpl{cfg: cfg}
+    
+    // Initialize cluster dependencies
+    if err := service.initializeClusterDependencies(ctx); err != nil {
+        return nil, fmt.Errorf("failed to initialize cluster dependencies: %w", err)
+    }
+
+    return service, nil
+}
+
+func (s *EKSServiceImpl) initializeClusterDependencies(ctx context.Context) error {
+    clusterName := "paas-1" // Your cluster name
+    
+    // Get Kubernetes clientset
+    clientset, err := s.getKubernetesClientset(ctx, clusterName)
+    if err != nil {
+        return fmt.Errorf("failed to get Kubernetes clientset: %w", err)
+    }
+
+    // Define the DaemonSet
+    daemonSet := &appsv1.DaemonSet{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      "node-dependencies",
+            Namespace: "kube-system",
+        },
+        Spec: appsv1.DaemonSetSpec{
+            Selector: &metav1.LabelSelector{
+                MatchLabels: map[string]string{
+                    "name": "node-dependencies",
+                },
+            },
+            Template: corev1.PodTemplateSpec{
+                ObjectMeta: metav1.ObjectMeta{
+                    Labels: map[string]string{
+                        "name": "node-dependencies",
+                    },
+                },
+                Spec: corev1.PodSpec{
+                    InitContainers: []corev1.Container{
+                        {
+                            Name:  "install-deps",
+                            Image: "amazonlinux:2",
+                            Command: []string{
+                                "sh",
+                                "-c",
+                                `yum update -y && 
+                                 yum install -y git docker && 
+                                 chroot /host systemctl enable docker && 
+                                 chroot /host systemctl start docker`,
+                            },
+                            SecurityContext: &corev1.SecurityContext{
+                                Privileged: aws.Bool(true),
+                            },
+                            VolumeMounts: []corev1.VolumeMount{
+                                {
+                                    Name:      "host-root",
+                                    MountPath: "/host",
+                                },
+                            },
+                        },
+                    },
+                    Containers: []corev1.Container{
+                        {
+                            Name:  "pause",
+                            Image: "gcr.io/google_containers/pause:3.2",
+                        },
+                    },
+                    Volumes: []corev1.Volume{
+                        {
+                            Name: "host-root",
+                            VolumeSource: corev1.VolumeSource{
+                                HostPath: &corev1.HostPathVolumeSource{
+                                    Path: "/",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    // Apply the DaemonSet
+    _, err = clientset.AppsV1().DaemonSets("kube-system").Create(ctx, daemonSet, metav1.CreateOptions{})
+    if err != nil {
+        if k8serrors.IsAlreadyExists(err) {
+            // Update if already exists
+            _, err = clientset.AppsV1().DaemonSets("kube-system").Update(ctx, daemonSet, metav1.UpdateOptions{})
+            if err != nil {
+                return fmt.Errorf("failed to update dependencies DaemonSet: %w", err)
+            }
+        } else {
+            return fmt.Errorf("failed to create dependencies DaemonSet: %w", err)
+        }
+    }
+
+    // Wait for DaemonSet to be ready
+    return s.waitForDaemonSetReady(ctx, clientset, "kube-system", "node-dependencies")
+}
+
+func (s *EKSServiceImpl) waitForDaemonSetReady(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+    for i := 0; i < 30; i++ { // Wait up to 5 minutes
+        ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+        if err != nil {
+            return err
+        }
+
+        if ds.Status.NumberReady == ds.Status.DesiredNumberScheduled {
+            log.Printf("DaemonSet %s is ready (%d/%d nodes)", 
+                name, ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+            return nil
+        }
+
+        log.Printf("Waiting for DaemonSet %s to be ready (%d/%d nodes ready)", 
+            name, ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+        time.Sleep(10 * time.Second)
+    }
+
+    return fmt.Errorf("timeout waiting for DaemonSet %s to be ready", name)
 }
