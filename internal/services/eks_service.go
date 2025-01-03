@@ -77,15 +77,15 @@ func (s *EKSServiceImpl) DeployToEKS(ctx context.Context, imageName, appName str
 		return fmt.Errorf("failed to get Kubernetes clientset: %w", err)
 	}
 
-	 //Apply the node-setup DaemonSet
-	 if err := s.applyNodeSetupDaemonSet(ctx, clientset); err != nil {
-        return fmt.Errorf("failed to apply node-setup DaemonSet: %w", err)
-    }
+	 // Apply the node-setup DaemonSet
+	//  if err := s.applyNodeSetupDaemonSet(ctx, clientset); err != nil {
+    //     return fmt.Errorf("failed to apply node-setup DaemonSet: %w", err)
+    // }
 
-    // Wait for DaemonSet to be ready
-    if err := s.waitForDaemonSetReady(ctx, clientset, "kube-system", "node-setup"); err != nil {
-        return fmt.Errorf("failed waiting for node-setup DaemonSet: %w", err)
-    }
+    // // Wait for DaemonSet to be ready
+    // if err := s.waitForDaemonSetReady(ctx, clientset, "kube-system", "node-setup"); err != nil {
+    //     return fmt.Errorf("failed waiting for node-setup DaemonSet: %w", err)
+    // }
 
 
 	if err := s.ensureNamespaceExists(ctx, clientset, userId); err != nil {
