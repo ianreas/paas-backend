@@ -5,11 +5,13 @@ import (
     "context"
     "fmt"
     "os"
-    "os/exec"
     "path/filepath"
     "strings"
     "time"
     "paas-backend/internal/utils"
+
+     "github.com/go-git/go-git/v5"
+    "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
 // this creates an instance of an ECRService. 
@@ -75,12 +77,52 @@ func (s *ECRServiceImpl) BuildAndPushToECR(ctx context.Context, repoFullName, ac
 
 //     return repoDir, nil
 // }
-func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
-    // Check if git is available
-    if _, err := exec.LookPath("git"); err != nil {
-        return "", fmt.Errorf("git is not installed: %w", err)
-    }
+// func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
+//     // Check if git is available
+//     if _, err := exec.LookPath("git"); err != nil {
+//         return "", fmt.Errorf("git is not installed: %w", err)
+//     }
 
+//     repoDir := filepath.Join(os.TempDir(), strings.ReplaceAll(repoFullName, "/", "_"))
+//     if err := os.RemoveAll(repoDir); err != nil {
+//         return "", fmt.Errorf("failed to remove existing directory: %w", err)
+//     }
+
+//     // Create the directory
+//     if err := os.MkdirAll(repoDir, 0755); err != nil {
+//         return "", fmt.Errorf("failed to create directory: %w", err)
+//     }
+
+//     // Construct the clone URL
+//     cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", accessToken, repoFullName)
+
+//     // Set up the command with working directory
+//     cloneCmd := exec.Command("git", "clone", cloneURL, ".")
+//     cloneCmd.Dir = repoDir
+
+//     // Set up output capturing
+//     var out, errOut strings.Builder
+//     cloneCmd.Stdout = &out
+//     cloneCmd.Stderr = &errOut
+
+//     // Set up environment variables
+//     cloneCmd.Env = append(os.Environ(),
+//         "GIT_TERMINAL_PROMPT=0",
+//         "GIT_SSL_NO_VERIFY=true",
+//     )
+
+//     // Run the command
+//     if err := cloneCmd.Run(); err != nil {
+//         // Clean up the directory in case of failure
+//         os.RemoveAll(repoDir)
+//         return "", fmt.Errorf("failed to clone repository: %w\nOutput: %s\nError: %s", 
+//             err, out.String(), errOut.String())
+//     }
+
+//     return repoDir, nil
+// }
+
+func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
     repoDir := filepath.Join(os.TempDir(), strings.ReplaceAll(repoFullName, "/", "_"))
     if err := os.RemoveAll(repoDir); err != nil {
         return "", fmt.Errorf("failed to remove existing directory: %w", err)
@@ -92,29 +134,24 @@ func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (stri
     }
 
     // Construct the clone URL
-    cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", accessToken, repoFullName)
+    cloneURL := fmt.Sprintf("https://github.com/%s.git", repoFullName)
 
-    // Set up the command with working directory
-    cloneCmd := exec.Command("git", "clone", cloneURL, ".")
-    cloneCmd.Dir = repoDir
+    // Set up authentication
+    auth := &http.BasicAuth{
+        Username: "x-access-token", // This can be anything except empty string
+        Password: accessToken,
+    }
 
-    // Set up output capturing
-    var out, errOut strings.Builder
-    cloneCmd.Stdout = &out
-    cloneCmd.Stderr = &errOut
-
-    // Set up environment variables
-    cloneCmd.Env = append(os.Environ(),
-        "GIT_TERMINAL_PROMPT=0",
-        "GIT_SSL_NO_VERIFY=true",
-    )
-
-    // Run the command
-    if err := cloneCmd.Run(); err != nil {
+    // Clone the repository
+    _, err := git.PlainClone(repoDir, false, &git.CloneOptions{
+        URL:      cloneURL,
+        Auth:     auth,
+        Progress: os.Stdout, // This will show clone progress
+    })
+    if err != nil {
         // Clean up the directory in case of failure
         os.RemoveAll(repoDir)
-        return "", fmt.Errorf("failed to clone repository: %w\nOutput: %s\nError: %s", 
-            err, out.String(), errOut.String())
+        return "", fmt.Errorf("failed to clone repository: %w", err)
     }
 
     return repoDir, nil
