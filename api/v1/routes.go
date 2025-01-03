@@ -67,7 +67,7 @@ func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
 
 	appsRepo := repositories.NewApplicationsRepository(db)
 
-	githubService := services.NewGitHubService()
+	githubService := services.NewGitHubService(db)
 
 	
 

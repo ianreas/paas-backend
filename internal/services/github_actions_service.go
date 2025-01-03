@@ -10,10 +10,15 @@ import (
 
 	"github.com/google/go-github/v67/github"
 	"golang.org/x/oauth2"
+
+	"paas-backend/internal/types"
+
+	"database/sql"
 )
 
 // WorkflowRequest represents the data required to create the workflow
 type WorkflowRequest struct {
+	ApplicationId string `json:"applicationId"`
 	RepoOwner   string `json:"repoOwner"`
 	RepoName    string `json:"repoName"`
 	AccessToken string `json:"accessToken"`
@@ -31,12 +36,14 @@ type GitHubService interface {
 	CreateWorkflow(ctx context.Context, req WorkflowRequest) (WorkflowResponse, error)
 }
 
-// gitHubService is the concrete implementation of GitHubService
-type gitHubService struct{}
+type gitHubService struct {
+    db *sql.DB
+}
 
-// NewGitHubService creates a new instance of GitHubService
-func NewGitHubService() GitHubService {
-	return &gitHubService{}
+func NewGitHubService(db *sql.DB) GitHubService {
+    return &gitHubService{
+        db: db,
+    }
 }
 
 // CreateWorkflow creates a GitHub Actions workflow in the repository and opens a PR
@@ -50,12 +57,19 @@ func (s *gitHubService) CreateWorkflow(ctx context.Context, req WorkflowRequest)
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
 
+	buildAndPushRequest, err := s.fetchRepo(ctx, req)
+	if err != nil {
+		log.Printf("Error fetching repository: %v", err)
+		return WorkflowResponse{}, fmt.Errorf("error fetching repository: %v", err)
+	}
+
 	// Generate branch name
 	branchName := fmt.Sprintf("feat/add-paas-workflow-%s", time.Now().Format("20060102150405"))
 	log.Printf("Generated branch name: %s", branchName)
 
+
 	// Generate workflow content
-	workflowContent, err := generateWorkflowContent()
+	workflowContent, err := generateWorkflowContent(buildAndPushRequest)
 	if err != nil {
 		log.Printf("Error generating workflow content: %v", err)
 		return WorkflowResponse{}, fmt.Errorf("error generating workflow: %v", err)
@@ -88,10 +102,51 @@ func (s *gitHubService) CreateWorkflow(ctx context.Context, req WorkflowRequest)
 		PRNumber: pr.GetNumber(),
 		PRURL:    pr.GetHTMLURL(),
 	}, nil
+
+}
+
+
+
+func (s *gitHubService) fetchRepo(ctx context.Context, workflowRequestObject WorkflowRequest) (types.BuildAndPushRequest, error){
+	if s.db == nil {
+        return types.BuildAndPushRequest{}, fmt.Errorf("database connection is not initialized")
+    }
+
+	query := `
+        SELECT github_repo_name, github_username, project_name, container_port
+        FROM applications 
+        WHERE id = $1
+    `
+
+	var app struct {
+        GithubRepoName string
+        GithubUsername string
+        ProjectName    string
+        ContainerPort  int32
+    }
+
+	err := s.db.QueryRowContext(ctx, query, workflowRequestObject.ApplicationId).Scan(
+        &app.GithubRepoName,
+        &app.GithubUsername,
+        &app.ProjectName,
+        &app.ContainerPort,
+    )
+
+	if err != nil {
+        if err == sql.ErrNoRows {
+            return types.BuildAndPushRequest{}, fmt.Errorf("application not found with ID: %s", workflowRequestObject.ApplicationId)
+        }
+        return types.BuildAndPushRequest{}, fmt.Errorf("error fetching application: %v", err)
+    }
+
+    return types.BuildAndPushRequest{
+        RepoFullName: fmt.Sprintf("%s/%s", app.GithubUsername, app.GithubRepoName),
+        AccessToken:  workflowRequestObject.AccessToken,
+    }, nil
 }
 
 // generateWorkflowContent generates the content of the GitHub Actions workflow file
-func generateWorkflowContent() (string, error) {
+func generateWorkflowContent(buildAndPushRequestObject types.BuildAndPushRequest) (string, error) {
 	log.Println("Generating workflow content")
 	tmpl, err := template.New("workflow").Delims("[[", "]]").Parse(workflowTemplate)
 	if err != nil {

@@ -15,8 +15,13 @@ func NewDockerService() DockerService {
 }
 
 func (s *DockerServiceImpl) BuildImage(dockerfilePath, imageName string) error {
-    buildCmd := exec.Command("docker", "build", "-f", dockerfilePath, "-t", imageName, filepath.Dir(dockerfilePath))
-    
+    dir := filepath.Dir(dockerfilePath)
+    buildCmd :=  exec.Command("docker", "build",
+    "--platform", "linux/amd64",  // Explicitly set platform
+    "-t", imageName,
+    "-f", dockerfilePath,
+    "--no-cache",  // Avoid caching issues
+    dir)
     // Capture both stdout and stderr
     var stdout, stderr bytes.Buffer
     buildCmd.Stdout = &stdout

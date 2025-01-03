@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"paas-backend/internal/types"
+
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,17 +15,6 @@ import (
 	"paas-backend/internal/services"
 )
 
-type BuildAndPushRequest struct {
-	RepoFullName   string `json:"repoFullName"`
-	AccessToken    string `json:"accessToken"`
-	UserId         string `json:"userId"`
-	GithubUsername string `json:"githubUsername"`
-	ContainerPort   int32  `json:"containerPort,omitempty"`
-	Replicas        *int32  `json:"replicas,omitempty"`
-    CPU             *string `json:"cpuAllocation,omitempty"`
-    Memory          *string `json:"memoryAllocation,omitempty"`
-}
-
 // BuildPushDeployApiHandler handles the build, push, deploy, and records the application in the database.
 func BuildPushDeployApiHandler(
 	ecrService services.ECRService,
@@ -31,7 +22,7 @@ func BuildPushDeployApiHandler(
 	appsRepo repositories.ApplicationsRepository,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req BuildAndPushRequest
+		var req types.BuildAndPushRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			log.Printf("Error decoding request body: %v", err)
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
