@@ -58,19 +58,63 @@ func (s *ECRServiceImpl) BuildAndPushToECR(ctx context.Context, repoFullName, ac
     return ecrImageURI, nil
 }
 
+// func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
+//     repoDir := filepath.Join(os.TempDir(), strings.ReplaceAll(repoFullName, "/", "_"))
+//     if err := os.RemoveAll(repoDir); err != nil {
+//         return "", fmt.Errorf("failed to remove existing directory: %w", err)
+//     }
+
+//     cloneCmd := exec.Command("git", "clone", fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", accessToken, repoFullName), repoDir)
+//     var out, errOut strings.Builder
+//     cloneCmd.Stdout = &out
+//     cloneCmd.Stderr = &errOut
+
+//     if err := cloneCmd.Run(); err != nil {
+//         return "", fmt.Errorf("failed to clone repository: %w. Output: %s. Error: %s", err, out.String(), errOut.String())
+//     }
+
+//     return repoDir, nil
+// }
 func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {
+    // Check if git is available
+    if _, err := exec.LookPath("git"); err != nil {
+        return "", fmt.Errorf("git is not installed: %w", err)
+    }
+
     repoDir := filepath.Join(os.TempDir(), strings.ReplaceAll(repoFullName, "/", "_"))
     if err := os.RemoveAll(repoDir); err != nil {
         return "", fmt.Errorf("failed to remove existing directory: %w", err)
     }
 
-    cloneCmd := exec.Command("git", "clone", fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", accessToken, repoFullName), repoDir)
+    // Create the directory
+    if err := os.MkdirAll(repoDir, 0755); err != nil {
+        return "", fmt.Errorf("failed to create directory: %w", err)
+    }
+
+    // Construct the clone URL
+    cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", accessToken, repoFullName)
+
+    // Set up the command with working directory
+    cloneCmd := exec.Command("git", "clone", cloneURL, ".")
+    cloneCmd.Dir = repoDir
+
+    // Set up output capturing
     var out, errOut strings.Builder
     cloneCmd.Stdout = &out
     cloneCmd.Stderr = &errOut
 
+    // Set up environment variables
+    cloneCmd.Env = append(os.Environ(),
+        "GIT_TERMINAL_PROMPT=0",
+        "GIT_SSL_NO_VERIFY=true",
+    )
+
+    // Run the command
     if err := cloneCmd.Run(); err != nil {
-        return "", fmt.Errorf("failed to clone repository: %w. Output: %s. Error: %s", err, out.String(), errOut.String())
+        // Clean up the directory in case of failure
+        os.RemoveAll(repoDir)
+        return "", fmt.Errorf("failed to clone repository: %w\nOutput: %s\nError: %s", 
+            err, out.String(), errOut.String())
     }
 
     return repoDir, nil
