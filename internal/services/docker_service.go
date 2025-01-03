@@ -3,35 +3,62 @@ package services
 
 import (
     "fmt"
-    "os/exec"
+    "context"
+    "io"
+    "os"
     "path/filepath"
-    "bytes"
+    "github.com/docker/docker/api/types"
+    "github.com/docker/docker/client"
+    
+    "github.com/docker/docker/pkg/archive"
 )
 
-type DockerServiceImpl struct{}
+type DockerServiceImpl struct {
+    client *client.Client
+}
 
-func NewDockerService() DockerService {
-    return &DockerServiceImpl{}
+func NewDockerService() (DockerService, error) {
+    cli, err := client.NewClientWithOpts(client.FromEnv)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create Docker client: %w", err)
+    }
+    return &DockerServiceImpl{
+        client: cli,
+    }, nil
 }
 
 func (s *DockerServiceImpl) BuildImage(dockerfilePath, imageName string) error {
+    ctx := context.Background()
+    
+    // Create build context
     dir := filepath.Dir(dockerfilePath)
-    buildCmd :=  exec.Command("docker", "build",
-    "--platform", "linux/amd64",  // Explicitly set platform
-    "-t", imageName,
-    "-f", dockerfilePath,
-    "--no-cache",  // Avoid caching issues
-    dir)
-    // Capture both stdout and stderr
-    var stdout, stderr bytes.Buffer
-    buildCmd.Stdout = &stdout
-    buildCmd.Stderr = &stderr
-    
-    err := buildCmd.Run()
+    tar, err := archive.TarWithOptions(dir, &archive.TarOptions{})
     if err != nil {
-        // Combine stdout and stderr for a comprehensive error message
-        return fmt.Errorf("docker build failed: %w\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
+        return fmt.Errorf("failed to create build context: %w", err)
     }
-    
+    defer tar.Close()
+
+    // Build options
+    opts := types.ImageBuildOptions{
+        Dockerfile: filepath.Base(dockerfilePath),
+        Tags:      []string{imageName},
+        Platform:  "linux/amd64",
+        NoCache:   true,
+        Remove:    true,
+    }
+
+    // Build the image
+    resp, err := s.client.ImageBuild(ctx, tar, opts)
+    if err != nil {
+        return fmt.Errorf("failed to build image: %w", err)
+    }
+    defer resp.Body.Close()
+
+    // Read the response
+    _, err = io.Copy(os.Stdout, resp.Body)
+    if err != nil {
+        return fmt.Errorf("failed to read build response: %w", err)
+    }
+
     return nil
 }
