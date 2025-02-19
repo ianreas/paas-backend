@@ -42,22 +42,29 @@ func (s *ECRServiceImpl) BuildAndPushToECR(ctx context.Context, repoFullName, ac
         return "", fmt.Errorf("dockerfile not found: %w", err)
     }
 
-    // Generate a unique tag using the current timestamp
+    // Generate ECR-compatible image name FIRST
     timestamp := time.Now().Format("20060102150405")
-    imageName := fmt.Sprintf("%s:%s", repoFullName, timestamp)
+    ecrImageName := fmt.Sprintf("590183673953.dkr.ecr.us-east-1.amazonaws.com/%s:%s", 
+        filepath.Base(repoFullName), // Extracts "dummy-express-eks" from "ianreas/dummy-express-eks"
+        timestamp)
 
-    // Build the Docker image
-    if err := s.dockerService.BuildImage(dockerfilePath, imageName); err != nil {
+    // Get ECR auth before building
+    ecrAuth, err := s.ecrRepo.GetAuthToken(ctx)
+    if err != nil {
+        return "", fmt.Errorf("failed to get ECR credentials: %w", err)
+    }
+
+    // Pass auth to build
+    if err := s.dockerService.BuildImage(dockerfilePath, ecrImageName, ecrAuth); err != nil {
         return "", fmt.Errorf("failed to build Docker image: %w", err)
     }
 
-    // Push the image to ECR
-    ecrImageURI, err := s.ecrRepo.PushImage(ctx, imageName)
-    if err != nil {
+    // Push using the same ECR name
+    if _, err := s.ecrRepo.PushImage(ctx, ecrImageName); err != nil {
         return "", fmt.Errorf("failed to push to ECR: %w", err)
     }
 
-    return ecrImageURI, nil
+    return ecrImageName, nil
 }
 
 // func (s *ECRServiceImpl) cloneRepository(repoFullName, accessToken string) (string, error) {

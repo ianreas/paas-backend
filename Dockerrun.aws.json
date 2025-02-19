@@ -1,0 +1,19 @@
+{
+    "AWSEBDockerrunVersion": "1",
+    "Image": {
+      "Name": "paas-backend:latest",
+      "Update": "true"
+    },
+    "Ports": [
+      {
+        "ContainerPort": "3005",
+        "HostPort": "80"
+      }
+    ],
+    "Volumes": [
+      {
+        "HostDirectory": "/var/run/docker.sock",
+        "ContainerDirectory": "/var/run/docker.sock"
+      }
+    ]
+  }

@@ -15,6 +15,11 @@ type ECRRepository struct {
     client *ecr.Client
 }
 
+type ECRAuth struct {
+    Username string
+    Password string
+    Registry string
+}
 
 func NewECRRepository(ctx context.Context) (*ECRRepository, error) {
     cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
@@ -71,4 +76,27 @@ func (r *ECRRepository) PushImage(ctx context.Context, imageName string) (string
     }
 
     return ecrImageName, nil
+}
+
+func (r *ECRRepository) GetAuthToken(ctx context.Context) (*ECRAuth, error) {
+    authOutput, err := r.client.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
+    if err != nil {
+        return nil, fmt.Errorf("failed to get ECR auth token: %w", err)
+    }
+
+    authToken, err := base64.StdEncoding.DecodeString(*authOutput.AuthorizationData[0].AuthorizationToken)
+    if err != nil {
+        return nil, fmt.Errorf("failed to decode auth token: %w", err)
+    }
+    
+    parts := strings.SplitN(string(authToken), ":", 2)
+    if len(parts) != 2 {
+        return nil, fmt.Errorf("invalid auth token format")
+    }
+
+    return &ECRAuth{
+        Username: parts[0],
+        Password: parts[1],
+        Registry: "590183673953.dkr.ecr.us-east-1.amazonaws.com",
+    }, nil
 }
