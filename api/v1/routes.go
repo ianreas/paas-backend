@@ -37,7 +37,10 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 // NewDependencies initializes all the required dependencies.
 func NewDependencies(ctx context.Context, db *sql.DB) (*Dependencies, error) {
-	dockerService := services.NewDockerService()
+	dockerService, err := services.NewDockerService()
+	if err != nil {
+		return nil, err
+	}
 	ecrRepo, err := repositories.NewECRRepository(ctx)
 	if err != nil {
 		return nil, err

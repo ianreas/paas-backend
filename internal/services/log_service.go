@@ -10,14 +10,10 @@
 // 	"github.com/aws/aws-sdk-go-v2/config"
 // 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 
-
 //     "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 
 // 	 "log"
 // )
-
-
-
 
 // // type LogService interface {
 // // 	StreamLogs(ctx context.Context, appName string, startTime time.Time) (<-chan string, <-chan error)
@@ -73,7 +69,7 @@
 //             if !strings.Contains(*stream.LogStreamName, appName) {
 //                 continue
 //             }
-            
+
 //             streamCount++
 //             log.Printf("Found matching stream %d: %s", streamCount, *stream.LogStreamName)
 
@@ -92,12 +88,11 @@
 //                 pageCount++
 //                 log.Printf("Processing page %d for stream %s", pageCount, *stream.LogStreamName)
 
-
 //                 output, err := paginator.NextPage(ctx)
 //                 if err != nil {
-//                     wrappedErr := fmt.Errorf("failed to fetch logs from stream %s (page %d): %w", 
-//                         *stream.LogStreamName, 
-//                         pageCount, 
+//                     wrappedErr := fmt.Errorf("failed to fetch logs from stream %s (page %d): %w",
+//                         *stream.LogStreamName,
+//                         pageCount,
 //                         err,
 //                     )
 //                     log.Printf("Error fetching logs: %v", wrappedErr)
@@ -106,8 +101,6 @@
 //                 }
 
 //                 log.Printf("Retrieved %d events on page %d", len(output.Events), pageCount)
-
-                
 
 //                 for _, event := range output.Events {
 //                     log.Printf("Log message: %s", *event.Message)
@@ -124,14 +117,13 @@
 //     return logChan, errChan
 // }
 
-
 // v2. worked well. fetched past logs
 // but not the new ones
 // need to add functionality to list to the new logs
 // func (s *LogServiceImpl) StreamLogs(ctx context.Context, appName string, startTime time.Time) (<-chan string, <-chan error) {
 //     logChan := make(chan string)
 //     errChan := make(chan error, 1)
-    
+
 //     log.Printf("Starting to stream logs for app: %s", appName)
 
 //     go func() {
@@ -175,7 +167,7 @@
 //                 // Calculate start time
 //                 // Start from 1 hour ago if no specific start time is provided
 //                 startTimeMs := startTime.Add(-1 * time.Hour).UnixNano() / int64(time.Millisecond)
-                
+
 //                 params := &cloudwatchlogs.GetLogEventsInput{
 //                     LogGroupName:  aws.String(logGroupName),
 //                     LogStreamName: aws.String(streamName),
@@ -184,7 +176,7 @@
 //                     Limit:         aws.Int32(100),  // Limit results per page
 //                 }
 
-//                 log.Printf("Getting logs from stream %s starting from %v", 
+//                 log.Printf("Getting logs from stream %s starting from %v",
 //                     streamName, time.Unix(0, startTimeMs*int64(time.Millisecond)))
 
 //                 var lastToken *string
@@ -218,7 +210,7 @@
 //                     for _, event := range output.Events {
 //                         eventTime := time.Unix(0, *event.Timestamp*int64(time.Millisecond))
 //                         log.Printf("Event from %v: %s", eventTime, *event.Message)
-                        
+
 //                         select {
 //                         case logChan <- *event.Message:
 //                         case <-ctx.Done():
@@ -245,12 +237,11 @@
 //     return logChan, errChan
 // }
 
-
-// v3.  worked well! polling for new logs 
+// v3.  worked well! polling for new logs
 // func (s *LogServiceImpl) StreamLogs(ctx context.Context, appName string, startTime time.Time) (<-chan string, <-chan error) {
 //     logChan := make(chan string)
 //     errChan := make(chan error, 1)
-    
+
 //     log.Printf("Starting to stream logs for app: %s", appName)
 
 //     go func() {
@@ -299,7 +290,7 @@
 //                         if latestTimestamp > 0 {
 //                             startTimeMs = latestTimestamp
 //                         }
-                        
+
 //                         params := &cloudwatchlogs.GetLogEventsInput{
 //                             LogGroupName:  aws.String(logGroupName),
 //                             LogStreamName: aws.String(streamName),
@@ -328,10 +319,10 @@
 //                                 if eventTime > latestTimestamp {
 //                                     latestTimestamp = eventTime
 //                                 }
-                                
+
 //                                 eventTimeFormatted := time.Unix(0, eventTime*int64(time.Millisecond))
 //                                 log.Printf("New event from %v: %s", eventTimeFormatted, *event.Message)
-                                
+
 //                                 select {
 //                                 case logChan <- *event.Message:
 //                                 case <-ctx.Done():
@@ -364,13 +355,12 @@
 //     return logChan, errChan
 // }
 
-
-// nice v4. 
-// logs work well and the new logs show up correctly in the ui. 
+// nice v4.
+// logs work well and the new logs show up correctly in the ui.
 // func (s *LogServiceImpl) StreamLogs(ctx context.Context, appName string, startTime time.Time) (<-chan string, <-chan error) {
 //     logChan := make(chan string)
 //     errChan := make(chan error, 1)
-    
+
 //     log.Printf("Starting to stream logs for app: %s", appName)
 
 //     go func() {
@@ -420,14 +410,14 @@
 //                     for _, event := range output.Events {
 //                         // Create a unique identifier for each log event
 //                         logID := fmt.Sprintf("%d-%s", *event.Timestamp, *event.Message)
-                        
+
 //                         // Only process if we haven't seen this log before and it's newer than our latest timestamp
 //                         if !seenLogs[logID] && *event.Timestamp > latestTimestamp {
 //                             seenLogs[logID] = true
 //                             if *event.Timestamp > latestTimestamp {
 //                                 latestTimestamp = *event.Timestamp
 //                             }
-                            
+
 //                             select {
 //                             case logChan <- *event.Message:
 //                             case <-ctx.Done():
@@ -454,19 +444,19 @@
 //     return logChan, errChan
 // }
 
-
 package services
 
 import (
-    "context"
-    "fmt"
-    "time"
-    "strings"
-    "log"
-    "github.com/aws/aws-sdk-go-v2/aws"
-    "github.com/aws/aws-sdk-go-v2/config"
-    "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-    "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 )
 
 type LogFilter struct {
@@ -491,7 +481,11 @@ func NewLogService(ctx context.Context) (LogService, error) {
         return nil, fmt.Errorf("failed to load AWS config: %w", err)
     }
 
+   
+
     client := cloudwatchlogs.NewFromConfig(cfg)
+
+    log.Printf("LogService successfully initialized")
     return &LogServiceImpl{client: client}, nil
 }
 
