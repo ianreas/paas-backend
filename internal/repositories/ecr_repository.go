@@ -1,14 +1,18 @@
 package repositories
 
 import (
-    "context"
-    "encoding/base64"
-    "fmt"
-    "os/exec"
-    "strings"
-    "log"
-    "github.com/aws/aws-sdk-go-v2/config"
-    "github.com/aws/aws-sdk-go-v2/service/ecr"
+	"context"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"log"
+	"os/exec"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
 )
 
 type ECRRepository struct {
@@ -33,10 +37,16 @@ func (r *ECRRepository) PushImage(ctx context.Context, imageName string) (string
     if len(parts) != 2 {
         return "", fmt.Errorf("invalid image name format: %s", imageName)
     }
-    //repoName := parts[0]
+    repoName := parts[0]
     tag := parts[1]
 
-    ecrImageName := fmt.Sprintf("590183673953.dkr.ecr.us-east-1.amazonaws.com/my-express-app:%s", tag)
+    // Ensure the repository exists
+    if err := r.ensureRepositoryExists(ctx, repoName); err != nil {
+        return "", fmt.Errorf("failed to ensure repository exists: %w", err)
+    }
+
+    // Format the ECR image name using the repository name
+    ecrImageName := fmt.Sprintf("590183673953.dkr.ecr.us-east-1.amazonaws.com/%s:%s", repoName, tag)
 
     authOutput, err := r.client.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
     if err != nil {
@@ -71,4 +81,33 @@ func (r *ECRRepository) PushImage(ctx context.Context, imageName string) (string
     }
 
     return ecrImageName, nil
+}
+
+func (r *ECRRepository) ensureRepositoryExists(ctx context.Context, repoName string) error {
+    // Try to describe the repository first
+    _, err := r.client.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
+        RepositoryNames: []string{repoName},
+    })
+    
+    if err != nil {
+        // If the repository doesn't exist, create it
+        var rnf *types.RepositoryNotFoundException
+        if errors.As(err, &rnf) {
+            log.Printf("Repository %s not found, creating it...", repoName)
+            _, err = r.client.CreateRepository(ctx, &ecr.CreateRepositoryInput{
+                RepositoryName: aws.String(repoName),
+                ImageScanningConfiguration: &types.ImageScanningConfiguration{
+                    ScanOnPush: true,
+                },
+            })
+            if err != nil {
+                return fmt.Errorf("failed to create repository: %w", err)
+            }
+            log.Printf("Repository %s created successfully", repoName)
+            return nil
+        }
+        return fmt.Errorf("failed to describe repository: %w", err)
+    }
+    
+    return nil
 }
